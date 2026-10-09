@@ -55,6 +55,9 @@ def mock_instagram(router: respx.MockRouter) -> None:
     router.get(f"{oauth.GRAPH_HOST}/v25.0/me").respond(
         json={"id": "app-scoped-1", "user_id": "17841400000000001", "username": "duka_la_mama"}
     )
+    router.post(f"{oauth.GRAPH_HOST}/v25.0/me/subscribed_apps", name="subscribe").respond(
+        json={"success": True}
+    )
 
 
 def test_state_round_trip_carries_consent_ref() -> None:
@@ -114,6 +117,21 @@ def test_callback_stores_account_with_encrypted_token(client: TestClient, db: Se
     assert decrypt_token(acct.access_token_enc) == LONG
     assert acct.token_expires_at is not None
     assert acct.token_expires_at > datetime.now(UTC) + timedelta(days=59)
+    sub = respx.routes["subscribe"]
+    assert sub.called
+    assert sub.calls[0].request.url.params["subscribed_fields"] == "comments,live_comments"
+
+
+@respx.mock
+def test_failed_webhook_subscription_does_not_block_onboarding(
+    client: TestClient, db: Session
+) -> None:
+    mock_instagram(respx.mock)
+    respx.routes["subscribe"].respond(500, json={"error": {"message": "nope"}})
+    state = oauth.make_state(get_settings())
+    resp = client.get("/oauth/callback", params={"code": "c", "state": state})
+    assert resp.status_code == 200
+    assert db.scalars(select(Account)).one().ig_user_id == "17841400000000001"
 
 
 @respx.mock

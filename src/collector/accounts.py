@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -9,6 +10,8 @@ from collector.config import Settings
 from collector.ig import oauth
 from collector.models import Account
 from collector.security import decrypt_token, encrypt_token
+
+log = logging.getLogger(__name__)
 
 
 def onboard(
@@ -37,6 +40,14 @@ def onboard(
     stmt = stmt.on_conflict_do_update(index_elements=[Account.ig_user_id], set_=update)
     session.execute(stmt)
     session.flush()
+
+    # Best effort: a failed subscription shouldn't undo onboarding; it can be retried
+    # with `collector webhooks subscribe`. Backfill still works without it.
+    try:
+        oauth.subscribe_webhooks(client, settings, long.access_token)
+    except (oauth.OAuthError, httpx.HTTPError) as e:
+        log.warning("webhook subscription failed for %s: %s", profile.user_id, e)
+
     return session.scalars(select(Account).where(Account.ig_user_id == profile.user_id)).one()
 
 

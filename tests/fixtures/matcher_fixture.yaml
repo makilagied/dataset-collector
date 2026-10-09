@@ -1,0 +1,207 @@
+# Hand-made precision/recall fixture for the lexicon matcher (raw text, before normalization).
+# positive: should be flagged by the lexicon. negative: should not.
+# TODO(native speakers): replace/extend with real, reviewed comments.
+
+positive:
+  - wewe ni mjinga sana
+  - Mjinga wewe!!!
+  - m.j.i.n.g.a kabisa
+  - huyu ni mpumbavu
+  - wapumbavu wote hawa
+  - mpumb@vu mkubwa
+  - malaya wewe
+  - m@l@y@ tu
+  - umalaya umezidi
+  - kahaba mkubwa
+  - Ka-ha-ba huyu
+  - msenge wewe
+  - m s e n g e
+  - wasenge hawa
+  - fala sana wewe
+  - wewe ni fala
+  - mafala wote
+  - boya wewe
+  - nyinyi ni maboya
+  - zuzu wewe
+  - bwege mkubwa
+  - kuma mamako
+  - kumamako
+  - mkundu wako
+  - matako yako
+  - mavi wewe
+  - kinyesi kabisa
+  - wewe ni mbwa
+  - mbwa wewe
+  - u nyani kabisa
+  - nyinyi ni nyani
+  - wewe punda
+  - punda wewe mjinga
+  - nguruwe wewe
+  - wewe kenge
+  - unakula kama nguruwe
+  - wewe ni ngedere
+  - takataka wewe
+  - mshamba wewe
+  - washamba hawa
+  - mshenzi sana
+  - washenzi wote
+  - ushenzi gani huu
+  - mjiiiinga
+  - mjnga wewe
+  - mpmbv
+  - mjing@ we
+  - MJ1NGA
+  - ｍｊｉｎｇａ
+  - мjіngа
+  - "mj​inga kabisa"
+  - mjingaa
+  - mjinnga
+  - mujinga
+  - mjingu wewe
+  - mpumbafu
+  - malayaa
+  - malaja
+  - kahabaa
+  - msenje
+  - shoga wewe
+  - wewe shoga
+  - m-s-h-e-n-z-i
+  - wajinga wengi humu
+  - ujinga mtupu
+  - kijinga sana
+  - wewe ni m j i n g a
+  - Ww ni mjinga
+  - mbwa koko wewe
+  - we mbwa
+  - nyie ni nyani
+  - wewe ni bwege
+  - bwege we
+  - mavi yako
+  - kuma wewe
+  - KUMA
+  - k.u.m.a
+  - f@la
+  - f a l a
+  - zuzu kabisa
+  - mazuzu hawa
+  - mabwege
+  - mjinga na mpumbavu
+  - wewe mjinga na mshenzi
+  - wewe ni mbuzi
+  - takataka kabisa wewe
+  - fisi wewe
+  - mpumbavu kabisa
+  - Mpumbavu!!!
+  - MALAYA
+  - malaya sana
+  - hii ni kahaba
+  - lofa wewe
+  - malofa hawa
+  - wapumbavu na wajinga
+  - mshenz
+  - msengee
+  - kinyesi wewe
+  - "m.p.u.m.b.a.v.u"
+  - umekuwa mbwa sasa
+
+negative:
+  - habari za asubuhi
+  - hongera sana dada
+  - safi sana kaka
+  - nakupenda bure
+  - mungu akubariki
+  - karibu tena
+  - asante kwa video
+  - mjini leo kuna foleni
+  - wanajenga nyumba mpya
+  - mjenga nyumba hodari
+  - kujenga taifa
+  - shoka la babu
+  - punde nitakuja
+  - nyama choma tamu sana
+  - nyanya yangu anakusalimu
+  - malaika wa mungu
+  - kundi la watu
+  - makundi ya vijana
+  - hili ni shamba langu
+  - mashamba ya mpunga
+  - kahawa ya asubuhi
+  - kama ulivyosema
+  - kuna watu wengi
+  - kula vizuri
+  - kumaliza kazi
+  - mbwa wangu anapenda kucheza
+  - nyama ya mbuzi
+  - nyani wengi mbugani
+  - punda anabeba mzigo
+  - nguruwe wa shambani
+  - tuliona fisi porini
+  - kenge alikuwa mtoni
+  - takataka zitolewe barabarani
+  - ngedere wanakula mahindi
+  - mzee wetu
+  - saa ngapi sasa
+  - lako jina nani
+  - yako ni nzuri
+  - wako wapi
+  - chako kitabu
+  - kunde na wali
+  - mpendwa wangu
+  - kazi nzuri
+  - timu yetu imeshinda
+  - goli safi
+  - simba na yanga
+  - msanii bora
+  - wimbo mzuri sana
+  - nimeipenda hii
+  - pole sana
+  - tunakuombea
+  - Ng'ombe wa babu
+  - mwaka 2026 utakuwa mzuri
+  - "@juma_k angalia hii"
+  - https://example.com/kuma
+  - "@mjinga_official huyu ni nani?"
+  - jengo jipya
+  - tujenge pamoja
+  - wajenga barabara
+  - utamaduni wetu
+  - umependeza sana
+  - hongera kwa ndoa
+  - mambo vipi
+  - poa sana
+  - ndio hivyo
+  - ufalme wa mungu
+  - mfalme wetu
+  - falme za kiarabu
+  - boti na boya baharini
+  - mahaba niue
+  - kupanda mlima
+  - panda mti
+  - pande zote
+  - mbuni ni ndege mkubwa
+  - kengele imelia
+  - kinywaji baridi
+  - mavazi mazuri
+  - kumaanisha nini
+  - kamati ya bunge
+  - msaada tafadhali
+  - duka letu liko wazi
+  - bei gani
+  - nauza viatu
+  - tuma namba
+  - asubuhi njema
+  - usiku mwema
+  - tutaonana kesho
+  - hii ni kweli
+  - sawa sawa
+  - subiri kidogo
+  - nakuja sasa hivi
+  - mamako anakusalimu
+  - kumbe ni wewe
+  - kama kawaida
+  - nimekumiss
+  - kima cha chini
+  - kiboko yao
+  - wewe ni mzuri sana
+  - wewe ni mrembo
+  - nyinyi ni mashujaa

@@ -1,0 +1,107 @@
+# Seed lexicon of abusive Swahili roots.
+#
+# TODO(native speakers): THIS IS A SMALL SEED LIST, NOT A REVIEWED LEXICON. Please review
+# every entry (meaning, severity, prefixes), add missing roots and regional variants,
+# and decide whether Kenyan Sheng is in scope (entries marked "sheng" in notes).
+#
+# Fields
+#   root               the stem, lowercase, as it appears after normalization
+#   prefixes           allowed noun-class prefixes; "" means the bare root is also a match.
+#                      Omit "" when the bare root is an innocent word (shamba = farm).
+#   severity           low | medium | high
+#   context_dependent  true for words that are only abusive when aimed at someone
+#                      (animal words). These count as hits only next to a 2nd-person cue.
+#   notes              free text for reviewers
+
+roots:
+  - {root: jinga, prefixes: [m, wa, u, ki, ma], severity: medium, context_dependent: false,
+     notes: "fool / foolishness (mjinga, wajinga, ujinga)"}
+  - {root: pumbavu, prefixes: [m, wa, u, ki], severity: medium, context_dependent: false,
+     notes: "idiot (mpumbavu, upumbavu)"}
+  - {root: shenzi, prefixes: [m, wa, u, ki], severity: medium, context_dependent: false,
+     notes: "savage / uncivilised (mshenzi, ushenzi)"}
+  - {root: bwege, prefixes: ["", ma], severity: medium, context_dependent: false,
+     notes: "fool"}
+  - {root: zuzu, prefixes: ["", ma], severity: medium, context_dependent: false,
+     notes: "fool"}
+  - {root: fala, prefixes: ["", ma], severity: medium, context_dependent: false,
+     notes: "fool (sheng / Kenyan)"}
+  - {root: boya, prefixes: ["", ma], severity: medium, context_dependent: true,
+     notes: "fool (sheng); also 'buoy'"}
+  - {root: lofa, prefixes: ["", ma], severity: low, context_dependent: false,
+     notes: "vagrant / good-for-nothing"}
+  - {root: shamba, prefixes: [m, wa], severity: low, context_dependent: false,
+     notes: "'bumpkin' (mshamba); bare 'shamba' = farm, so no bare match"}
+  - {root: malaya, prefixes: ["", u], severity: high, context_dependent: false,
+     notes: "prostitute (slur)"}
+  - {root: kahaba, prefixes: ["", ma, u], severity: high, context_dependent: false,
+     notes: "prostitute (slur)"}
+  - {root: senge, prefixes: [m, wa, u], severity: high, context_dependent: false,
+     notes: "homophobic slur"}
+  - {root: shoga, prefixes: ["", ma, u], severity: high, context_dependent: true,
+     notes: "homophobic slur; on the coast also 'female friend'"}
+  - {root: kuma, prefixes: [""], severity: high, context_dependent: false,
+     notes: "vulgar (genitals)"}
+  - {root: kumamako, prefixes: [""], severity: high, context_dependent: false,
+     notes: "vulgar insult directed at someone's mother"}
+  - {root: kundu, prefixes: [m, mi], severity: high, context_dependent: false,
+     notes: "vulgar (anus) - mkundu"}
+  - {root: tako, prefixes: [ma], severity: medium, context_dependent: false,
+     notes: "vulgar (buttocks) - matako"}
+  - {root: mavi, prefixes: [""], severity: medium, context_dependent: false,
+     notes: "excrement"}
+  - {root: nyesi, prefixes: [ki, vi], severity: medium, context_dependent: false,
+     notes: "excrement (kinyesi)"}
+  - {root: mbwa, prefixes: [""], severity: medium, context_dependent: true,
+     notes: "dog"}
+  - {root: nyani, prefixes: [""], severity: medium, context_dependent: true,
+     notes: "baboon"}
+  - {root: punda, prefixes: [""], severity: medium, context_dependent: true,
+     notes: "donkey"}
+  - {root: nguruwe, prefixes: [""], severity: medium, context_dependent: true,
+     notes: "pig"}
+  - {root: kenge, prefixes: [""], severity: medium, context_dependent: true,
+     notes: "monitor lizard; 'idiot'"}
+  - {root: ngedere, prefixes: [""], severity: medium, context_dependent: true,
+     notes: "monkey"}
+  - {root: mbuzi, prefixes: [""], severity: low, context_dependent: true,
+     notes: "goat"}
+  - {root: fisi, prefixes: [""], severity: low, context_dependent: true,
+     notes: "hyena; 'greedy person'"}
+  - {root: takataka, prefixes: [""], severity: medium, context_dependent: true,
+     notes: "rubbish"}
+
+# Innocent words that collide with roots (by fuzzy or skeleton matching). Never matched.
+allowlist:
+  - jenga
+  - mjenga
+  - wajenga
+  - kujenga
+  - ujenge
+  - tujenge
+  - kama
+  - kima
+  - kuna
+  - kula
+  - shoka
+  - punde
+  - pande
+  - panda
+  - nyama
+  - nyanya
+  - malaika
+  - kundi
+  - makundi
+  - vikundi
+  - kunde
+  - mkunde
+  - mashamba
+  - kahawa
+  - mbuni
+
+# Words that point an insult at the reader. A context_dependent root counts as a hit only
+# when one of these is within two tokens of it.
+second_person_cues:
+  words: [wewe, we, wee, nyinyi, ninyi, nyie, u]
+  # 2nd-person singular verb forms: unakula, umekuwa, utakufa, ulikuwa
+  pattern: "^u(na|me|ta|li)[a-z]{2,}"

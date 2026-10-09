@@ -24,6 +24,17 @@ TEST_ENV = {
 }
 
 
+# Lines tests want shown at the end of the run (e.g. matcher precision/recall).
+REPORT: list[str] = []
+
+
+def pytest_terminal_summary(terminalreporter: pytest.TerminalReporter) -> None:
+    if REPORT:
+        terminalreporter.section("metrics")
+        for line in REPORT:
+            terminalreporter.write_line(line)
+
+
 @pytest.fixture(autouse=True)
 def _env(monkeypatch: pytest.MonkeyPatch) -> None:
     from collector.config import get_settings

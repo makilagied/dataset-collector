@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     ig_webhook_verify_token: str
     token_enc_key: str
     author_hash_key: str
+    # Only needed if webhooks also arrive from a Facebook Login app (signed with its secret).
+    fb_app_secret: str | None = None
     graph_api_version: str = "v25.0"
 
 

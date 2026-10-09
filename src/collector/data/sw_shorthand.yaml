@@ -1,0 +1,25 @@
+# Swahili texting shorthand, applied per token after leetspeak and repeat-collapsing.
+# Input is already lowercased. Surrounding punctuation is kept ("ww," -> "wewe,").
+#
+# TODO(native speakers): extend both tables. Keep entries unambiguous: a whole-token
+# entry must not also be a common real word.
+
+# Whole-token replacements (looked up first).
+tokens:
+  ww: wewe
+  nn: nini
+  km: kama
+  mm: mimi
+  vp: vipi
+  hv: hivi
+  kwann: kwanini
+  sjui: sijui
+  "2": tu
+
+# Ordered regex substitutions inside tokens that contain at least one letter
+# (so plain numbers such as "2026" are left alone).
+patterns:
+  - ["2", "tu"]              # m2 -> mtu, wa2 -> watu
+  - ["x", "s"]               # xaxa -> sasa, xema -> sema
+  - ["c(?!h)(?=[aeiou])", "s"]   # mcenge -> msenge, cawa -> sawa ("ch" is a real digraph)
+  - ["c(?!h)", "si"]         # cjui -> sijui, cwezi -> siwezi, cc -> sisi

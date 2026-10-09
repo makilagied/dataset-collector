@@ -159,6 +159,21 @@ def refresh_long_lived(client: httpx.Client, token: str) -> LongLivedToken:
     return _long_lived(data)
 
 
+WEBHOOK_FIELDS = ("comments", "live_comments")
+
+
+def subscribe_webhooks(client: httpx.Client, settings: Settings, token: str) -> None:
+    """Enable webhook delivery for this account (POST /me/subscribed_apps)."""
+    data = _check(
+        client.post(
+            f"{GRAPH_HOST}/{settings.graph_api_version}/me/subscribed_apps",
+            params={"subscribed_fields": ",".join(WEBHOOK_FIELDS), "access_token": token},
+        )
+    )
+    if data.get("success") is not True:
+        raise OAuthError(f"subscribed_apps did not report success: {data}")
+
+
 def fetch_profile(client: httpx.Client, settings: Settings, token: str) -> Profile:
     data = _check(
         client.get(
