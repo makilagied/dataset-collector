@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -27,6 +28,7 @@ class Account(Base):
     ig_user_id: Mapped[str] = mapped_column(String, unique=True)
     username: Mapped[str | None] = mapped_column(String)  # account owner, who consented
     consent_ref: Mapped[str | None] = mapped_column(String)
+    category: Mapped[str | None] = mapped_column(String)  # e.g. udaku, football, media, music
     access_token_enc: Mapped[str] = mapped_column(Text)
     token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     connected_at: Mapped[datetime] = mapped_column(
@@ -74,10 +76,17 @@ class Comment(Base):
 
 class CommentFeatures(Base):
     __tablename__ = "comment_features"
-    __table_args__ = (Index("ix_comment_features_roots", "matched_roots", postgresql_using="gin"),)
+    __table_args__ = (
+        Index("ix_comment_features_roots", "matched_roots", postgresql_using="gin"),
+        # Duplicate detection looks rows up by text; hash it since comments can be long.
+        Index("ix_comment_features_text_norm_md5", text("md5(text_norm)")),
+    )
 
     comment_id: Mapped[int] = mapped_column(ForeignKey("comments.id"), primary_key=True)
     text_norm: Mapped[str] = mapped_column(Text)
+    # Kept in the DB but left out of sampling: empty | emoji_only | link_only |
+    # mention_only | duplicate. NULL means eligible.
+    exclude_reason: Mapped[str | None] = mapped_column(String)
     lang: Mapped[str | None] = mapped_column(String)
     lang_conf: Mapped[float | None] = mapped_column(Float)
     matched_roots: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)

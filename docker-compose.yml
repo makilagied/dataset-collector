@@ -22,6 +22,9 @@ services:
       DATABASE_URL: postgresql+psycopg://collector:collector@db:5432/collector
     ports:
       - "8000:8000"
+    volumes:
+      # `collector export` writes here; files appear in ./exports on the host.
+      - ./exports:/app/exports
     depends_on:
       db:
         condition: service_healthy

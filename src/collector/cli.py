@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Annotated
 
 import httpx
@@ -22,6 +23,8 @@ app.add_typer(accounts_app, name="accounts")
 app.add_typer(tokens_app, name="tokens")
 webhooks_app = typer.Typer(help="Webhook subscriptions", no_args_is_help=True)
 app.add_typer(webhooks_app, name="webhooks")
+demo_app = typer.Typer(help="Synthetic demo data (no Meta app needed)", no_args_is_help=True)
+app.add_typer(demo_app, name="demo")
 
 
 @accounts_app.command("list")
@@ -35,7 +38,10 @@ def accounts_list() -> None:
         for a in rows:
             expires = a.token_expires_at.date().isoformat() if a.token_expires_at else "-"
             status = "active" if a.active else "inactive"
-            typer.echo(f"{a.id:>4}  @{a.username or '?':<30} {status:<8} token expires {expires}")
+            typer.echo(
+                f"{a.id:>4}  @{a.username or '?':<30} {status:<8} "
+                f"category {a.category or '-':<10} token expires {expires}"
+            )
 
 
 @app.command()
@@ -60,6 +66,176 @@ def backfill(
     typer.echo(
         f"media: {stats.media_seen} seen, {stats.media_skipped} skipped (resumed) | "
         f"comments: {stats.comments_seen} seen, {stats.comments_inserted} new"
+    )
+
+
+@app.command()
+def process(
+    batch_size: Annotated[int, typer.Option(help="Comments per batch")] = 500,
+    all_: Annotated[
+        bool, typer.Option("--all", help="Reprocess every comment, not just new/outdated ones")
+    ] = False,
+) -> None:
+    """Normalize, match and language-ID new comments into comment_features."""
+    from collector.pipeline.process import pipeline_version
+    from collector.pipeline.process import process as run_process
+
+    typer.echo(f"pipeline version {pipeline_version()}")
+    with session_scope() as session:
+        stats = run_process(session, batch_size=batch_size, reprocess_all=all_)
+    typer.echo(f"processed {stats.processed} comments, {stats.hits} lexicon hits")
+    if stats.excluded:
+        excluded = ", ".join(f"{k} {v}" for k, v in stats.excluded.most_common())
+        typer.echo(f"excluded from sampling: {excluded}")
+    if stats.langs:
+        typer.echo("languages: " + ", ".join(f"{k} {v}" for k, v in stats.langs.most_common()))
+
+
+@app.command()
+def sample(
+    batch: Annotated[str, typer.Option(help="Name for the new labelling batch")],
+    size: Annotated[int, typer.Option(help="Number of comments to draw")],
+    mix: Annotated[str, typer.Option(help="lexicon/model/random percentages")] = "50/30/20",
+    scorer: Annotated[str, typer.Option(help="Scorer for the model stratum")] = "stub",
+    seed: Annotated[int | None, typer.Option(help="Seed for a reproducible draw")] = None,
+    lang: Annotated[
+        str | None, typer.Option(help="Only comments in this language, e.g. sw")
+    ] = None,
+) -> None:
+    """Draw a stratified batch of comments for labelling."""
+    from collector.pipeline.sample import SampleError, parse_mix, sample_batch
+    from collector.pipeline.scoring import SCORERS
+
+    if scorer not in SCORERS:
+        typer.echo(f"Unknown scorer {scorer!r}; choose from {', '.join(SCORERS)}", err=True)
+        raise typer.Exit(1)
+    try:
+        with session_scope() as session:
+            result = sample_batch(
+                session,
+                batch,
+                size,
+                parse_mix(mix),
+                scorer=SCORERS[scorer](),
+                seed=seed,
+                lang=lang,
+            )
+    except SampleError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from e
+    parts = ", ".join(f"{s} {result.drawn[s]}/{result.requested[s]}" for s in result.drawn)
+    typer.echo(f"batch {batch!r}: {result.total} comments ({parts})")
+    for note in result.notes:
+        typer.echo(f"  note: {note}")
+
+
+@app.command()
+def export(
+    batch: Annotated[str, typer.Option(help="Batch to export")],
+    format_: Annotated[str, typer.Option("--format", help="csv or jsonl")] = "csv",
+    out: Annotated[Path | None, typer.Option(help="Output file")] = None,
+) -> None:
+    """Export a batch for labelling (mentions, URLs and emails masked)."""
+    from collector.pipeline.export import ExportError, export_batch
+
+    path = out or Path("exports") / f"{batch}.{format_}"
+    try:
+        with session_scope() as session:
+            result = export_batch(session, batch, format_, path)
+    except ExportError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from e
+    typer.echo(f"wrote {result.rows} rows to {result.path}")
+
+
+@accounts_app.command("set-category")
+def accounts_set_category(
+    account: Annotated[int, typer.Argument(help="Local account id")],
+    category: Annotated[str, typer.Argument(help="e.g. udaku, football, media, music")],
+) -> None:
+    """Set the category exported with this account's comments."""
+    with session_scope() as session:
+        acct = session.get(Account, account)
+        if acct is None:
+            typer.echo(f"No account with id {account}.", err=True)
+            raise typer.Exit(1)
+        acct.category = category.strip().lower()
+    typer.echo(f"account {account}: category = {category.strip().lower()}")
+
+
+@app.command()
+def stats() -> None:
+    """Counts per account, abuse-hit rate, language split, exclusions and batches."""
+    from collector.pipeline.stats import collect_stats
+
+    with session_scope() as session:
+        s = collect_stats(session)
+    if not s.accounts:
+        typer.echo("No accounts yet. Connect one via /connect, or try `collector demo load`.")
+        return
+    typer.echo(
+        f"{'id':>4}  {'account':<22} {'category':<10} {'media':>6} {'comments':>9} "
+        f"{'processed':>10} {'eligible':>9} {'hits':>6} {'hit rate':>9}"
+    )
+    for a in s.accounts:
+        name = ("@" + a.username + ("" if a.active else " (inactive)"))[:22]
+        typer.echo(
+            f"{a.account_id:>4}  {name:<22} {a.category[:10]:<10} {a.media:>6} "
+            f"{a.comments:>9} {a.processed:>10} {a.eligible:>9} {a.hits:>6} "
+            f"{a.hit_rate:>8.1%}"
+        )
+    typer.echo(
+        f"{'':>4}  {'TOTAL':<22} {'':<10} {sum(a.media for a in s.accounts):>6} "
+        f"{s.comments:>9} {s.processed:>10} {s.eligible:>9} {s.hits:>6} "
+        f"{s.hit_rate:>8.1%}"
+    )
+    if s.comments > s.processed:
+        typer.echo(
+            f"\n{s.comments - s.processed} comments not processed yet: run `collector process`."
+        )
+
+    def shares(counts: dict[str, int]) -> str:
+        total = sum(counts.values()) or 1
+        return ", ".join(f"{k} {v} ({v / total:.0%})" for k, v in counts.items())
+
+    if s.languages:
+        typer.echo(f"\nlanguages (eligible): {shares(s.languages)}")
+    if s.excluded:
+        typer.echo(
+            "excluded from sampling: " + ", ".join(f"{k} {v}" for k, v in s.excluded.items())
+        )
+    if s.batches:
+        typer.echo("\nbatches:")
+        for b in s.batches:
+            strata = ", ".join(f"{k} {v}" for k, v in sorted(b.strata.items()))
+            typer.echo(f"  {b.name:<20} {b.size:>5} ({strata}){'  exported' if b.exported else ''}")
+    typer.echo("\nhit = lexicon match_score >= 0.5, over comments eligible for sampling")
+
+
+@demo_app.command("load")
+def demo_load() -> None:
+    """Backfill a synthetic demo account through a fake, in-process Instagram API."""
+    from collector.demo import load_demo
+
+    logging.basicConfig(level=logging.WARNING)
+    with session_scope() as session:
+        account, stats = load_demo(session)
+    typer.echo(
+        f"demo account id {account.id}: {stats.media_seen} posts, "
+        f"{stats.comments_seen} comments seen, {stats.comments_inserted} new"
+    )
+    typer.echo("next: collector process && collector stats")
+
+
+@demo_app.command("remove")
+def demo_remove() -> None:
+    """Delete the demo account and all of its data."""
+    from collector.demo import remove_demo
+
+    with session_scope() as session:
+        removed = remove_demo(session)
+    typer.echo(
+        f"removed demo account and {removed} comments" if removed else "no demo account found"
     )
 
 

@@ -11,7 +11,7 @@ WORKDIR /app
 # Install dependencies first so code changes don't re-download them.
 COPY pyproject.toml ./
 RUN mkdir -p src/collector && touch src/collector/__init__.py \
-    && pip install --retries 10 . \
+    && pip install --retries 10 ".[nlp]" \
     && pip uninstall -y ig-abuse-dataset
 
 COPY src ./src
