@@ -108,6 +108,22 @@ class Sample(Base):
     exported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class Job(Base):
+    """Background task started from the admin UI (backfill, process, ...)."""
+
+    __tablename__ = "jobs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String)
+    params: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    status: Mapped[str] = mapped_column(String, default="queued")  # queued|running|done|failed
+    result: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class SyncState(Base):
     __tablename__ = "sync_state"
 

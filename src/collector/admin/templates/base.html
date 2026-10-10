@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} · Collector admin</title>
+{% if refresh %}<meta http-equiv="refresh" content="{{ refresh }}">{% endif %}
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #667085; --border: #e3e6eb;
+    --accent: #2f6fde; --accent-text: #ffffff; --ok-bg: #e8f5ec; --ok: #1f7a3f;
+    --warn-bg: #fff6e0; --warn: #8a5a00; --err-bg: #fdecec; --err: #b42323;
+    --hit-bg: #fde8e8; --chip: #eef1f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --panel: #1b2029; --text: #e6e9ef; --muted: #98a2b3; --border: #2c3340;
+      --accent: #5b8ff0; --accent-text: #0d1117; --ok-bg: #16301f; --ok: #6fcf8f;
+      --warn-bg: #33290f; --warn: #f0c45a; --err-bg: #3a1818; --err: #f08a8a;
+      --hit-bg: #3a1c1f; --chip: #262d38;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: var(--bg); color: var(--text); }
+  header { background: var(--panel); border-bottom: 1px solid var(--border); }
+  nav { max-width: 1200px; margin: 0 auto; padding: 0 16px; display: flex; gap: 4px;
+        align-items: center; flex-wrap: wrap; min-height: 52px; }
+  nav .brand { font-weight: 700; margin-right: 16px; }
+  nav a { color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 6px; }
+  nav a:hover { color: var(--text); background: var(--chip); }
+  nav a.on { color: var(--text); background: var(--chip); font-weight: 600; }
+  main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 20px; margin: 0 0 16px; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  a { color: var(--accent); }
+  .muted { color: var(--muted); }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+           padding: 16px; margin-bottom: 16px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+           gap: 12px; margin-bottom: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+          padding: 14px 16px; }
+  .card .n { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card .l { color: var(--muted); font-size: 12px; text-transform: uppercase;
+             letter-spacing: .04em; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border);
+           vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.hit td { background: var(--hit-bg); }
+  .text { max-width: 420px; white-space: pre-wrap; word-break: break-word; }
+  .chip { display: inline-block; background: var(--chip); border-radius: 999px;
+          padding: 1px 8px; font-size: 12px; margin: 1px 2px 1px 0; white-space: nowrap; }
+  .status-done { color: var(--ok); } .status-failed, .status-interrupted { color: var(--err); }
+  .status-running, .status-queued { color: var(--warn); }
+  .flash { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; }
+  .flash.ok { background: var(--ok-bg); color: var(--ok); }
+  .flash.warn { background: var(--warn-bg); color: var(--warn); }
+  .flash.error { background: var(--err-bg); color: var(--err); }
+  form.inline { display: inline-flex; gap: 6px; align-items: center; margin: 2px 0; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  input, select { font: inherit; color: var(--text); background: var(--panel);
+                  border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+  input[type=number] { width: 90px; }
+  button { font: inherit; border: 1px solid var(--border); background: var(--panel);
+           color: var(--text); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  code { background: var(--chip); padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+  .pager { display: flex; gap: 12px; align-items: center; margin-top: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <nav>
+    <span class="brand">Collector</span>
+    {% if not hide_nav %}
+    {% for href, label in [("/admin", "Overview"), ("/admin/accounts", "Accounts"),
+                           ("/admin/comments", "Comments"), ("/admin/batches", "Batches"),
+                           ("/admin/jobs", "Jobs")] %}
+      <a href="{{ href }}" class="{{ 'on' if path == href else '' }}">{{ label }}</a>
+    {% endfor %}
+    <form method="post" action="/admin/logout" style="margin-left: auto">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <span class="muted">{{ user }}</span> <button>Log out</button>
+    </form>
+    {% endif %}
+  </nav>
+</header>
+<main>
+  {% if flash %}<div class="flash {{ flash_kind }}">{{ flash }}</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

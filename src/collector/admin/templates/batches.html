@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% set title = "Batches" %}
+{% block content %}
+<h1>Labelling batches</h1>
+
+<div class="panel">
+  <h2>Draw a new batch</h2>
+  <p class="muted">{{ eligible }} processed comment(s) are eligible. A comment is never drawn into two batches.</p>
+  <form class="row" method="post" action="/admin/batches">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/batches">
+    <label>Name<input name="batch" required pattern="[\w.\-]{1,60}" placeholder="batch-1"></label>
+    <label>Size<input type="number" name="size" min="1" value="200" required></label>
+    <label>Mix lexicon/model/random<input name="mix" value="50/30/20" size="9"></label>
+    <label>Language<select name="lang"><option value="">Any</option><option value="sw">sw</option><option value="en">en</option></select></label>
+    <label>Seed (optional)<input type="number" name="seed"></label>
+    <label>Scorer<select name="scorer">{% for s in scorers %}<option>{{ s }}</option>{% endfor %}</select></label>
+    <button class="primary">Draw batch</button>
+  </form>
+</div>
+
+<div class="panel scroll">
+  {% if batches %}
+  <table>
+    <tr><th>Batch</th><th class="num">Size</th><th>Strata</th><th>Exported</th><th>Download</th></tr>
+    {% for b in batches %}
+    <tr>
+      <td>{{ b.name }}</td>
+      <td class="num">{{ b.size }}</td>
+      <td>{% for s, n in b.strata|dictsort %}<span class="chip">{{ s }} {{ n }}</span>{% endfor %}</td>
+      <td>{{ "yes" if b.exported else "no" }}</td>
+      <td><a href="/admin/batches/{{ b.name|urlencode }}/export?fmt=csv">CSV</a> ·
+          <a href="/admin/batches/{{ b.name|urlencode }}/export?fmt=jsonl">JSONL</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No batches yet.</p>{% endif %}
+</div>
+<p class="muted">Exports mask @mentions, links and emails, and contain no commenter identifiers.</p>
+{% endblock %}

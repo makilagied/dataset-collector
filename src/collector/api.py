@@ -1,7 +1,7 @@
 import json
 import logging
-from collections.abc import Iterator
-from functools import lru_cache
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager
 from html import escape
 from typing import Annotated, Any
 
@@ -10,21 +10,28 @@ from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Req
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from sqlalchemy.orm import Session, sessionmaker
 
+from collector import admin
 from collector.accounts import onboard
 from collector.config import Settings, get_settings
-from collector.db import make_engine
+from collector.db import get_sessionmaker
 from collector.ig import oauth, webhook
+from collector.logs import configure_logging
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s:     %(name)s %(message)s")
+configure_logging()
 log = logging.getLogger(__name__)
 
-app = FastAPI(title="IG abuse dataset collector")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    try:
+        admin.recover_jobs(get_sessionmaker())
+    except Exception:  # never block startup on this bookkeeping
+        log.warning("could not mark interrupted jobs", exc_info=True)
+    yield
 
 
-@lru_cache
-def get_sessionmaker() -> sessionmaker[Session]:
-    return sessionmaker(make_engine(), expire_on_commit=False)
-
+app = FastAPI(title="IG abuse dataset collector", lifespan=lifespan)
+admin.install(app)
 
 SessionmakerDep = Annotated[sessionmaker[Session], Depends(get_sessionmaker)]
 
@@ -68,17 +75,43 @@ def oauth_callback(
 ) -> HTMLResponse:
     try:
         consent_ref = oauth.verify_state(settings, state)
-    except oauth.OAuthError as e:
-        raise HTTPException(status_code=400, detail="invalid state") from e
+    except oauth.OAuthError:
+        # Usually a reloaded/restored callback tab or a login that took over 10 minutes.
+        return _page(
+            "This link has expired",
+            'Please <a href="/connect">start the connection again</a>.',
+            status=400,
+        )
     if error or not code:
-        raise HTTPException(status_code=400, detail=f"authorization failed: {error or 'no code'}")
+        return _page(
+            "Connection cancelled",
+            'Instagram did not grant access. <a href="/connect">Try again</a> if this was a '
+            "mistake.",
+            status=400,
+        )
     try:
         account = onboard(session, http, settings, code, consent_ref)
-    except oauth.OAuthError as e:
-        raise HTTPException(status_code=502, detail="token exchange failed") from e
+    except oauth.OAuthError:
+        log.warning("token exchange failed", exc_info=True)
+        return _page(
+            "Something went wrong",
+            'We could not complete the connection with Instagram. Please <a href="/connect">'
+            "try again</a> in a few minutes.",
+            status=502,
+        )
+    return _page(
+        "Connected",
+        f"Thank you. @{escape(account.username or '')} is now connected. You can close this page.",
+    )
+
+
+def _page(title: str, body: str, status: int = 200) -> HTMLResponse:
     return HTMLResponse(
-        f"<h1>Connected</h1><p>Thank you. @{escape(account.username or '')} is now connected."
-        " You can close this page.</p>"
+        f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+        f"<title>{escape(title)}</title>"
+        f"<body style='font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;"
+        f"padding:0 1rem;line-height:1.5'><h1>{escape(title)}</h1><p>{body}</p></body>",
+        status_code=status,
     )
 
 

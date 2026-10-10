@@ -13,6 +13,7 @@ from collector.db import session_scope
 from collector.ig import oauth
 from collector.ig.backfill import backfill_account
 from collector.ig.client import GraphClient
+from collector.logs import configure_logging
 from collector.models import Account
 from collector.security import decrypt_token
 
@@ -52,7 +53,7 @@ def backfill(
     ] = None,
 ) -> None:
     """Fetch media, comments and replies for one account. Safe to rerun; resumes if interrupted."""
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    configure_logging(logging.INFO)
     settings = get_settings()
     with session_scope() as session, httpx.Client(timeout=30) as http:
         acct = session.get(Account, account)
@@ -148,6 +149,29 @@ def export(
     typer.echo(f"wrote {result.rows} rows to {result.path}")
 
 
+@app.command("export-all")
+def export_all(
+    format_: Annotated[str, typer.Option("--format", help="csv or jsonl")] = "csv",
+    account: Annotated[int | None, typer.Option(help="Only this account id")] = None,
+    show: Annotated[
+        str, typer.Option(help="all | hits | matched | excluded | unprocessed")
+    ] = "all",
+    out: Annotated[Path | None, typer.Option(help="Output file")] = None,
+) -> None:
+    """Export ALL collected comments (abusive or not), anonymized, with their features."""
+    from collector.pipeline.export import ExportError, export_all_comments
+
+    stamp = datetime.now().strftime("%Y%m%d-%H%M")
+    path = out or Path("exports") / f"comments-{show}-{stamp}.{format_}"
+    try:
+        with session_scope() as session:
+            result = export_all_comments(session, format_, path, account_id=account, show=show)
+    except ExportError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from e
+    typer.echo(f"wrote {result.rows} comments to {result.path}")
+
+
 @accounts_app.command("set-category")
 def accounts_set_category(
     account: Annotated[int, typer.Argument(help="Local account id")],
@@ -217,7 +241,7 @@ def demo_load() -> None:
     """Backfill a synthetic demo account through a fake, in-process Instagram API."""
     from collector.demo import load_demo
 
-    logging.basicConfig(level=logging.WARNING)
+    configure_logging(logging.WARNING)
     with session_scope() as session:
         account, stats = load_demo(session)
     typer.echo(

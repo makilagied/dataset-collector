@@ -30,5 +30,18 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Public HTTPS tunnel to the app, for Meta's OAuth redirect and webhooks during
+  # development. Needs NGROK_AUTHTOKEN and NGROK_DOMAIN in .env (see README). Without
+  # them only this container exits; the rest of the stack runs normally.
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: ["http", "--url=${NGROK_DOMAIN:-}", "app:8000"]
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    ports:
+      - "4040:4040"  # ngrok inspector: see every request Meta sends
+    depends_on:
+      - app
+
 volumes:
   pgdata:

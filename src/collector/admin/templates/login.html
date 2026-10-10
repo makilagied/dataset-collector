@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% set title = "Log in" %}
+{% set hide_nav = True %}
+{% block content %}
+<div class="panel" style="max-width: 360px; margin: 48px auto">
+  <h1>Log in</h1>
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+  <form method="post" action="/admin/login" style="display: flex; flex-direction: column; gap: 12px">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label>Username<input name="username" autocomplete="username" required autofocus></label>
+    <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+    <button class="primary">Log in</button>
+  </form>
+  <p class="muted">Username and password are <code>ADMIN_USER</code> (default <code>admin</code>)
+    and <code>ADMIN_PASSWORD</code> in <code>.env</code>.</p>
+</div>
+{% endblock %}

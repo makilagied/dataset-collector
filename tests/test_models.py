@@ -9,4 +9,5 @@ def test_schema_has_all_tables() -> None:
         "comment_features",
         "samples",
         "sync_state",
+        "jobs",
     }

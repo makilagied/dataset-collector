@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     # Only needed if webhooks also arrive from a Facebook Login app (signed with its secret).
     fb_app_secret: str | None = None
     graph_api_version: str = "v25.0"
+    # Admin UI at /admin. Disabled while ADMIN_PASSWORD is empty. Requests through a proxy
+    # or tunnel (ngrok) are refused unless ADMIN_ALLOW_REMOTE is true.
+    admin_user: str = "admin"
+    admin_password: str | None = None
+    admin_allow_remote: bool = False
 
 
 @lru_cache

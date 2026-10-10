@@ -21,6 +21,12 @@ TEST_ENV = {
     "IG_WEBHOOK_VERIFY_TOKEN": "verify-me",
     "AUTHOR_HASH_KEY": "test-hmac-key",
     "GRAPH_API_VERSION": "v25.0",
+    # Pin optional settings too, so a developer's .env never leaks into tests
+    # (environment variables take precedence over .env).
+    "FB_APP_SECRET": "",
+    "ADMIN_USER": "admin",
+    "ADMIN_PASSWORD": "",
+    "ADMIN_ALLOW_REMOTE": "false",
 }
 
 

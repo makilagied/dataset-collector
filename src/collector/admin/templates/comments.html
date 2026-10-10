@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% set title = "Comments" %}
+{% block content %}
+<h1>Comments <span class="muted" style="font-weight: 400">{{ total }}</span></h1>
+
+<form class="panel row" method="get" action="/admin/comments">
+  <label>Account
+    <select name="account">
+      <option value="">All accounts</option>
+      {% for a in accounts %}<option value="{{ a.id }}" {% if filters.account == a.id %}selected{% endif %}>@{{ a.username }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Show
+    <select name="show">
+      {% for value, label in [("all", "All"), ("hits", "Lexicon hits"), ("matched", "Any root matched"),
+                              ("excluded", "Excluded from sampling"), ("unprocessed", "Not processed yet")] %}
+        <option value="{{ value }}" {% if filters.show == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Text contains<input name="q" value="{{ filters.q }}" placeholder="search…"></label>
+  <button class="primary">Filter</button>
+  <a href="/admin/comments">Reset</a>
+  <span style="margin-left: auto">
+    Download these {{ total }} comments:
+    <a href="{{ export_url('csv') }}">CSV</a> · <a href="{{ export_url('jsonl') }}">JSONL</a>
+  </span>
+</form>
+
+<div class="panel scroll">
+  {% if rows %}
+  <table>
+    <tr><th>When</th><th>Account</th><th>Comment</th><th>Normalized</th><th>Lang</th>
+        <th>Roots</th><th class="num">Score</th><th>Notes</th></tr>
+    {% for c, f, permalink, username in rows %}
+    <tr class="{{ 'hit' if f and f.match_score is not none and f.match_score >= hit_threshold and not f.exclude_reason else '' }}">
+      <td style="white-space: nowrap">{{ c.commented_at|dt }}</td>
+      <td>@{{ username }}{% if permalink and permalink.startswith("https://") %}<br><a href="{{ permalink }}" target="_blank" rel="noopener noreferrer">post ↗</a>{% endif %}</td>
+      <td class="text">{{ c.text_raw }}</td>
+      <td class="text muted">{{ f.text_norm if f else "" }}</td>
+      <td>{{ f.lang if f and f.lang else "—" }}</td>
+      <td>{% if f %}{% for r in f.matched_roots %}<span class="chip">{{ r }}</span>{% endfor %}{% endif %}</td>
+      <td class="num">{{ "%.2f"|format(f.match_score) if f and f.match_score else "" }}</td>
+      <td>
+        {% if not f %}<span class="chip">unprocessed</span>{% endif %}
+        {% if f and f.exclude_reason %}<span class="chip">{{ f.exclude_reason }}</span>{% endif %}
+        {% if c.parent_ig_comment_id %}<span class="chip">reply</span>{% endif %}
+        {% if c.hidden %}<span class="chip">hidden</span>{% endif %}
+        <span class="chip">{{ c.source }}</span>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  <div class="pager">
+    {% if page > 1 %}<a href="{{ page_url(page - 1) }}">← Newer</a>{% endif %}
+    <span class="muted">Page {{ page }} of {{ pages }}</span>
+    {% if page < pages %}<a href="{{ page_url(page + 1) }}">Older →</a>{% endif %}
+  </div>
+  {% else %}<p class="muted">No comments match.</p>{% endif %}
+</div>
+<p class="muted">Highlighted rows are lexicon hits eligible for sampling. Commenter identities are never stored.</p>
+{% endblock %}

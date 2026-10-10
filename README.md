@@ -74,17 +74,51 @@ docker compose down                                # stop; add -v to also delete
 
 **Troubleshooting**
 
-- **Port already in use:** something else is using 5432 or 8000. Stop it, or change the
-  left-hand port in `docker-compose.yml`.
+- **Port already in use:** something else is using 5432, 8000 or 4040. Stop it, or change
+  the left-hand port in `docker-compose.yml`.
+- **`ngrok` container exited:** expected until you set up ngrok (see "Development without a
+  server" below). The demo doesn't need it.
 - **`TOKEN_ENC_KEY` errors:** the key must be the full value printed in step 2.
 - **Slow first build:** the image downloads a ~170 MB language model once. Later builds are
   cached.
 
 ---
 
+## Admin UI
+
+Open <http://localhost:8000/admin>. You'll see a login page: the username is `admin` (or
+`ADMIN_USER`), and the password is `ADMIN_PASSWORD` from `.env`.
+
+- **Disabled by default:** the UI is switched off while that password is empty.
+- **Sessions:** a session lasts 12 hours. **Log out** is at the top right. Changing the
+  password logs everyone out.
+- **Scripts:** they can use HTTP Basic auth instead, e.g.
+  `curl -u admin:<password> http://localhost:8000/admin/jobs`.
+
+| Page | What you can do |
+|---|---|
+| **Overview** | Totals, hit rate, language split. Buttons to process new comments, reprocess everything, refresh tokens. Recent jobs |
+| **Accounts** | For each account: start a backfill (optionally since a date), set its category, re-subscribe webhooks, pause or resume. Also makes `/connect` links that carry a consent reference |
+| **Comments** | Browse comments with their normalized text, language, matched roots and score. Filter by account, by hits / excluded / unprocessed, or by text |
+| **Batches** | Draw a labelling batch, and download any batch as CSV or JSONL |
+| **Jobs** | Status and results of background jobs. The page refreshes itself while a job is running |
+
+- **Background jobs:** backfills and processing run one at a time in the background. Their
+  history is kept in the `jobs` table. Jobs that were running when the app stopped show up
+  as `interrupted`.
+- **Security:**
+  - The UI is **only reachable locally**. Requests through the ngrok tunnel are refused
+    unless you set `ADMIN_ALLOW_REMOTE=true`. Only do that with a strong password.
+  - Every form carries a CSRF token.
+  - Comment text is always HTML-escaped.
+  - Pages can't be framed by other sites, and a strict Content-Security-Policy blocks all
+    scripts.
+- **Pausing** an account stops backfills, and its webhooks are ignored. Nothing is deleted.
+
 ## Commands
 
-All commands run inside the app container:
+The same actions are available on the command line. All commands run inside the app
+container:
 
 ```bash
 docker compose exec app collector <command>
@@ -176,8 +210,27 @@ Meta webhooks ────────────┘          │
    docker compose exec app collector process
    ```
 
-**Development without a server:** expose port 8000 with a tunnel such as
-`ngrok http 8000`, and use the tunnel's HTTPS URL in steps 3–4 and in `IG_REDIRECT_URI`.
+**Development without a server: the ngrok tunnel.** `docker compose up` also starts an
+`ngrok` container that gives the app a public HTTPS address.
+
+1. Create a free account at <https://dashboard.ngrok.com>. Copy **Your Authtoken**, and
+   claim your free static domain under **Domains** (e.g. `something.ngrok-free.app`).
+2. In `.env`:
+
+   ```
+   NGROK_AUTHTOKEN=<your authtoken>
+   NGROK_DOMAIN=something.ngrok-free.app
+   IG_REDIRECT_URI=https://something.ngrok-free.app/oauth/callback
+   ```
+
+3. Run `docker compose up -d`. Then open `https://something.ngrok-free.app/docs` to check
+   the tunnel, or <http://localhost:4040> to watch every request in the ngrok inspector.
+4. Use `https://something.ngrok-free.app/oauth/callback` (step 3) and
+   `https://something.ngrok-free.app/webhook` (step 4) in the Meta dashboard.
+
+Without these values only the `ngrok` container exits (`ERR_NGROK_4018`); everything else
+runs. On the free plan, ngrok shows browsers a one-time warning page: click **Visit Site**.
+Meta's webhook calls are not affected.
 
 **Webhooks from a Facebook Login app** (optional): set `FB_APP_SECRET` to that app's
 secret. Its webhooks are signed with it, and both payload shapes are accepted.
