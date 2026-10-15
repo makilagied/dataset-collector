@@ -1,118 +1,126 @@
 {% extends "base.html" %}
+{% from "_ui.html" import icon %}
 {% set title = "Scrape" %}
 {% block content %}
-<h1>Scrape public comments</h1>
+<div class="page-head">
+  <div>
+    <h1>Scrape public comments</h1>
+    <p class="sub">Log in once per platform, list what to scrape, and watch the jobs run. Only comments with an abusive word are kept.</p>
+  </div>
+</div>
 
 {% if unavailable %}
-<div class="flash warn">
+<div class="flash warn"><div>
   <strong>Scraping is off in this copy of the dashboard</strong> ({{ unavailable }}).
   It drives a real browser window, so the dashboard has to run on your computer, not in Docker.
   In a terminal in the project folder run <code>.venv\Scripts\Activate.ps1</code> then
   <code>collector ui</code>, and open <code>http://127.0.0.1:8001/admin/scrape</code>.
-</div>
+</div></div>
 {% endif %}
 
 <div class="panel">
-  <h2>1 · Log in</h2>
-  <p class="muted">A browser window opens on this computer. Log in there and it closes by itself.
+  <h2><span class="step">1</span>Log in</h2>
+  <p class="muted small">A browser window opens on this computer. Log in there and it closes by itself.
     Do this once per platform; the login is kept until the site logs you out.
     Use a separate account, not your personal one: scraping can get an account blocked.</p>
-  <table>
-    <tr><th>Platform</th><th>Status</th><th></th></tr>
+  <div class="grid-2" style="gap: 12px">
     {% for platform in ["instagram", "facebook"] %}
     {% set s = logins[platform] %}
-    <tr>
-      <td>{{ platform|title }}</td>
-      <td>
-        {% if s is none %}<span class="muted">not checked yet</span>
-        {% elif s.ok %}<span class="status-done">logged in</span> <span class="muted">(checked {{ s.at[:16]|replace("T", " ") }} UTC)</span>
-        {% else %}<span class="status-failed">not logged in</span> <span class="muted">(checked {{ s.at[:16]|replace("T", " ") }} UTC)</span>{% endif %}
-      </td>
-      <td>
-        <form class="inline" method="post" action="/admin/scrape/login">
-          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/scrape">
-          <input type="hidden" name="platform" value="{{ platform }}">
-          <button {% if unavailable %}disabled{% endif %}>Log in to {{ platform|title }}</button>
-        </form>
-      </td>
-    </tr>
+    <div class="card" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
+      <div>
+        <div style="font-weight: 650">{{ platform|title }}</div>
+        <div class="small">
+          {% if s is none %}<span class="pill">not checked yet</span>
+          {% elif s.ok %}<span class="pill status-done">logged in</span> <span class="muted">checked {{ s.at[:16]|replace("T", " ") }} UTC</span>
+          {% else %}<span class="pill status-failed">not logged in</span> <span class="muted">checked {{ s.at[:16]|replace("T", " ") }} UTC</span>{% endif %}
+        </div>
+      </div>
+      <form class="inline" method="post" action="/admin/scrape/login">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/scrape">
+        <input type="hidden" name="platform" value="{{ platform }}">
+        <button {% if unavailable %}disabled{% endif %}>Log in to {{ platform|title }}</button>
+      </form>
+    </div>
     {% endfor %}
-  </table>
-  <p class="muted">Facebook: set the account's language to English (Settings → Language), because the scraper clicks English button labels.</p>
+  </div>
+  <p class="muted small" style="margin-top: 12px">Facebook: set the account's language to English (Settings → Language), because the scraper clicks English button labels.</p>
 </div>
 
+<div class="grid-2">
 {% for platform, hint in [
     ("instagram", "One per line: @username, #hashtag, or a post / reel link\n@millardayo\n#udaku\nhttps://www.instagram.com/p/SHORTCODE/"),
     ("facebook", "One per line: a page / group link (its recent posts) or a post link\nhttps://www.facebook.com/somepage\nhttps://www.facebook.com/somepage/posts/pfbid0...")] %}
 <div class="panel">
-  <h2>2 · Scrape {{ platform|title }}</h2>
+  <h2><span class="step">2</span>Scrape {{ platform|title }}</h2>
   <form method="post" action="/admin/scrape">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/scrape">
     <input type="hidden" name="platform" value="{{ platform }}">
     <label>Targets<textarea name="targets" required placeholder="{{ hint }}"></textarea></label>
-    <div class="row" style="margin-top: 10px">
+    <div class="row" style="margin-top: 12px">
       <label>Posts per target<input type="number" name="max_posts" min="1" max="500" value="20"></label>
       <label>Comments per post<input type="number" name="max_comments" min="1" max="100000" value="5000"></label>
-      {% if platform == "instagram" %}<label>Only posts since (optional)<input type="date" name="since"></label>{% endif %}
       <label>Seconds between requests<input type="number" name="delay" min="1" max="60" step="0.5" value="4"></label>
+      {% if platform == "instagram" %}<label>Only posts since (optional)<input type="date" name="since"></label>{% endif %}
       <label>Category (optional)<input name="category" placeholder="udaku, football…" list="categories"></label>
     </div>
-    <div class="row" style="margin-top: 10px; gap: 18px">
+    <div class="row" style="margin-top: 14px; gap: 18px">
       <label class="check"><input type="checkbox" name="refresh" value="1"> Rescrape posts already done</label>
       <label class="check"><input type="checkbox" name="process" value="1" checked> Process new comments when finished</label>
     </div>
-    <p class="muted">Only comments with an abusive word are stored: a word from the Swahili or English
-      lexicon, in any disguised spelling. Words like "dog" or "mbwa" count only when aimed at someone
-      ("you dog", "wewe ni mbwa"). Other comments are read and dropped. To catch a new word, add it to
-      the lexicon.</p>
+    <hr class="divider">
     <button class="primary" {% if unavailable %}disabled{% endif %}>Start {{ platform|title }} scrape</button>
   </form>
 </div>
 {% endfor %}
+</div>
+<p class="note">Only comments with an abusive word are stored: a word from the Swahili or English
+  lexicon, in any disguised spelling. Words like "dog" or "mbwa" count only when aimed at someone
+  ("you dog", "wewe ni mbwa"). Other comments are read and dropped. To catch a new word, add it to
+  the lexicon.</p>
 
-<div class="panel scroll">
-  <div class="row" style="justify-content: space-between; align-items: center">
-    <h2 style="margin: 0">3 · Progress</h2>
-    <span><a href="/admin/scrape">Refresh</a> · <a href="/admin/jobs">All jobs →</a></span>
+<div class="panel flush">
+  <div class="panel-head">
+    <h2><span class="step">3</span>Progress</h2>
+    <span class="actions-row"><a class="btn sm" href="/admin/scrape">Refresh</a><a class="btn sm ghost" href="/admin/jobs">All jobs →</a></span>
   </div>
   {% if recent_jobs %}
-  <table style="margin-top: 8px">
+  <div class="scroll" style="margin-top: 12px"><table>
     <tr><th>#</th><th>Job</th><th>Targets</th><th>Status</th><th>Started</th><th>Result</th></tr>
     {% for j in recent_jobs %}
     <tr>
-      <td>{{ j.id }}</td>
-      <td>{{ "login" if j.kind == "scrape_login" else "scrape" }} · {{ (j.params or {}).get("platform", "")|title }}</td>
+      <td class="id">{{ j.id }}</td>
+      <td class="nowrap">{{ "login" if j.kind == "scrape_login" else "scrape" }} · {{ (j.params or {}).get("platform", "")|title }}</td>
       <td>{% for t in (j.params or {}).get("targets", []) %}<span class="chip">{{ t }}</span>{% endfor %}</td>
-      <td class="status-{{ j.status }}">{{ j.status }}</td>
-      <td style="white-space: nowrap">{{ j.started_at|dt }}</td>
+      <td><span class="pill status-{{ j.status }}">{{ j.status }}</span></td>
+      <td class="nowrap">{{ j.started_at|dt }}</td>
       <td class="text">{{ j.error or j.result or "" }}</td>
     </tr>
     {% endfor %}
-  </table>
-  {% if active %}<p class="muted">A job is running. A scrape takes a few seconds per post; click Refresh to update.
+  </table></div>
+  {% if active %}<p class="muted small" style="padding-top: 12px; padding-bottom: 14px">A job is running. A scrape takes a few seconds per post; click Refresh to update.
     Don't touch the browser window while it works.</p>{% endif %}
-  {% else %}<p class="muted">No scrapes yet.</p>{% endif %}
+  {% else %}<div class="empty">{{ icon("scrape") }}No scrapes yet.</div>{% endif %}
 </div>
 
-<div class="panel scroll">
-  <h2>Scraped sources</h2>
+<div class="panel flush">
+  <div class="panel-head"><h2>Scraped sources</h2></div>
   {% if sources %}
-  <table>
+  <div class="scroll" style="margin-top: 12px"><table>
     <tr><th>Source</th><th>Platform</th><th>Category</th><th class="num">Posts</th><th class="num">Comments</th><th class="num">Hits</th><th></th></tr>
     {% for r in sources %}{% set a = r.account %}{% set s = r.stats %}
     <tr>
-      <td>{{ a.username }}</td>
-      <td>{{ "Instagram" if r.platform == "ig" else "Facebook" }}</td>
+      <td><strong>{{ a.username }}</strong></td>
+      <td><span class="chip">{{ "Instagram" if r.platform == "ig" else "Facebook" }}</span></td>
       <td>{{ a.category or "—" }}</td>
       <td class="num">{{ s.media if s else 0 }}</td>
       <td class="num">{{ s.comments if s else 0 }}</td>
-      <td class="num">{{ s.hits if s else 0 }}</td>
-      <td><a href="/admin/posts?account={{ a.id }}">Posts</a> · <a href="/admin/comments?account={{ a.id }}">Comments</a></td>
+      <td class="num"><strong>{{ s.hits if s else 0 }}</strong></td>
+      <td class="nowrap"><a href="/admin/posts?account={{ a.id }}">Posts</a> · <a href="/admin/comments?account={{ a.id }}">Comments</a></td>
     </tr>
     {% endfor %}
-  </table>
-  <p class="muted">Next: browse <a href="/admin/comments">Comments</a>, then draw a labelling sample on <a href="/admin/batches">Batches</a>.</p>
-  {% else %}<p class="muted">Nothing scraped yet.</p>{% endif %}
+  </table></div>
+  <p class="muted small" style="padding-top: 12px; padding-bottom: 14px">Next: browse <a href="/admin/comments">Comments</a>, then draw a labelling sample on <a href="/admin/batches">Batches</a>.</p>
+  {% else %}<div class="empty">{{ icon("empty") }}Nothing scraped yet.</div>{% endif %}
 </div>
 <datalist id="categories"><option value="udaku"><option value="football"><option value="media"><option value="music"></datalist>
 {% endblock %}

@@ -1,23 +1,30 @@
 {% extends "base.html" %}
+{% from "_ui.html" import icon %}
 {% set title = "Jobs" %}
 {% block content %}
-<h1>Jobs {% if refresh %}<span class="muted" style="font-weight: 400">· refreshing every {{ refresh }}s</span>{% endif %}</h1>
-<div class="panel scroll">
+<div class="page-head">
+  <div>
+    <h1>Jobs</h1>
+    <p class="sub">Background work: backfills, scrapes, processing and token refreshes.</p>
+  </div>
+  {% if refresh %}<span class="pill status-running">refreshing every {{ refresh }}s</span>{% endif %}
+</div>
+<div class="panel flush">
   {% if jobs %}
-  <table>
-    <tr><th>#</th><th>Job</th><th>Parameters</th><th>Status</th><th>Queued</th><th>Duration</th><th>Result</th></tr>
+  <div class="scroll"><table>
+    <tr><th>#</th><th>Job</th><th>Parameters</th><th>Status</th><th>Queued</th><th class="num">Duration</th><th>Result</th></tr>
     {% for j in jobs %}
     <tr>
-      <td>{{ j.id }}</td>
-      <td>{{ j.kind }}</td>
+      <td class="id">{{ j.id }}</td>
+      <td><strong>{{ j.kind }}</strong></td>
       <td>{% for k, v in (j.params or {}).items() %}<span class="chip">{{ k }}={{ v }}</span>{% endfor %}</td>
-      <td class="status-{{ j.status }}">{{ j.status }}</td>
-      <td style="white-space: nowrap">{{ j.created_at|dt }}</td>
+      <td><span class="pill status-{{ j.status }}">{{ j.status }}</span></td>
+      <td class="nowrap">{{ j.created_at|dt }}</td>
       <td class="num">{% if j.started_at and j.finished_at %}{{ "%.1f"|format((j.finished_at - j.started_at).total_seconds()) }}s{% endif %}</td>
       <td class="text">{{ j.error or j.result or "" }}</td>
     </tr>
     {% endfor %}
-  </table>
-  {% else %}<p class="muted">No jobs yet. Start one from the Overview or Accounts page.</p>{% endif %}
+  </table></div>
+  {% else %}<div class="empty">{{ icon("jobs") }}No jobs yet. Start one from the Overview or Accounts page.</div>{% endif %}
 </div>
 {% endblock %}

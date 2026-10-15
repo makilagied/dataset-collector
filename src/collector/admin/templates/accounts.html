@@ -1,52 +1,63 @@
 {% extends "base.html" %}
+{% from "_ui.html" import icon %}
 {% set title = "Accounts" %}
 {% block content %}
-<h1>Accounts</h1>
+<div class="page-head">
+  <div>
+    <h1>Accounts <span class="count">{{ rows|length }}</span></h1>
+    <p class="sub">Connected Instagram accounts and scraped sources. Backfill, categorise, or pause each one.</p>
+  </div>
+</div>
 
 <div class="panel">
   <h2>Invite an account owner</h2>
   <p class="muted">Add their Instagram account as a tester in the Meta dashboard and have them sign the
     consent form. Then send them a connect link that carries the form's reference.</p>
   <form class="row" method="get" action="/admin/accounts">
-    <label>Consent reference<input name="consent_ref" value="{{ consent_ref }}" placeholder="e.g. CF-2026-014" required></label>
-    <button>Make link</button>
+    <label>Consent reference<input name="consent_ref" value="{{ consent_ref }}" placeholder="e.g. CF-2026-014" required style="min-width: 240px"></label>
+    <button class="primary">Make link</button>
   </form>
-  {% if connect_link %}<p>Send this link: <code>{{ connect_link }}</code></p>{% endif %}
-  <p class="muted">Base URL comes from <code>IG_REDIRECT_URI</code>: <code>{{ connect_base }}</code></p>
+  {% if connect_link %}<div class="copy-box"><span class="muted small">Send this link</span><code>{{ connect_link }}</code></div>{% endif %}
+  <p class="muted small" style="margin-top: 12px">Base URL comes from <code>IG_REDIRECT_URI</code>: <code>{{ connect_base }}</code></p>
 </div>
 
 {% for r in rows %}
 {% set a = r.account %}{% set s = r.stats %}
 <div class="panel">
-  <div class="row" style="justify-content: space-between; align-items: center">
-    <h2 style="margin: 0">@{{ a.username or "?" }}
-      {% if r.demo %}<span class="chip">demo</span>{% endif %}
+  <div class="panel-head">
+    <h2 style="font-size: 17px">@{{ a.username or "?" }}
+      <span class="muted" style="font-weight: 400; font-size: 13px">#{{ a.id }}</span>
+      {% if r.demo %}<span class="chip accent">demo</span>{% endif %}
       {% if r.scraped %}<span class="chip">scraped</span>{% endif %}
-      {% if not a.active %}<span class="chip">paused</span>{% endif %}
-      <span class="muted" style="font-weight: 400">#{{ a.id }}</span></h2>
-    <span><a href="/admin/posts?account={{ a.id }}">View posts →</a> · <a href="/admin/comments?account={{ a.id }}">View comments →</a></span>
+      {% if a.category %}<span class="chip">{{ a.category }}</span>{% endif %}
+      {% if not a.active %}<span class="chip warn">paused</span>{% endif %}</h2>
+    <span class="actions-row">
+      <a class="btn sm" href="/admin/posts?account={{ a.id }}">View posts</a>
+      <a class="btn sm" href="/admin/comments?account={{ a.id }}">View comments</a>
+    </span>
   </div>
 
-  <div class="cards" style="margin: 12px 0">
+  <div class="cards">
     <div class="card"><div class="l">Posts</div><div class="n">{{ s.media if s else 0 }}</div></div>
     <div class="card"><div class="l">Comments collected</div><div class="n">{{ s.comments if s else 0 }}</div></div>
-    <div class="card"><div class="l">Hits</div><div class="n">{{ s.hits if s else 0 }}</div></div>
+    <div class="card danger"><div class="l">Hits</div><div class="n">{{ s.hits if s else 0 }}</div></div>
     <div class="card"><div class="l">Hit rate</div><div class="n">{{ "%.1f"|format((s.hit_rate if s else 0) * 100) }}%</div></div>
   </div>
 
   {% if r.scraped %}
-  <p class="muted">Scraped source, added {{ a.connected_at|dt }} · last scraped {{ r.last_sync|dt }} ·
+  <p class="muted small">Scraped source, added {{ a.connected_at|dt }} · last scraped {{ r.last_sync|dt }} ·
     scrape it again from the <a href="/admin/scrape">Scrape</a> page</p>
   {% else %}
-  <p class="muted">
+  <p class="muted small">
     Connected {{ a.connected_at|dt }} · last backfill {{ r.last_sync|dt }} ·
     token expires {{ a.token_expires_at|dt }}
-    {% if a.token_expires_at and (a.token_expires_at - now).days < 10 %}<strong class="status-failed">(soon: refresh tokens)</strong>{% endif %}
+    {% if a.token_expires_at and (a.token_expires_at - now).days < 10 %}<span class="chip err">soon: refresh tokens</span>{% endif %}
     · consent ref {{ a.consent_ref or "—" }}
   </p>
   {% endif %}
 
-  <div class="row">
+  <hr class="divider">
+  <div class="row" style="gap: 20px">
     <form class="inline" method="post" action="/admin/accounts/{{ a.id }}/backfill">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/accounts">
       <label>Since (optional)<input type="date" name="since"></label>
@@ -57,19 +68,21 @@
       <label>Category<input name="category" value="{{ a.category or '' }}" placeholder="udaku, football…" list="categories"></label>
       <button>Save</button>
     </form>
-    <form class="inline" method="post" action="/admin/accounts/{{ a.id }}/subscribe">
-      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/accounts">
-      <button {% if r.demo or r.scraped %}disabled{% endif %}>Re-subscribe webhooks</button>
-    </form>
-    <form class="inline" method="post" action="/admin/accounts/{{ a.id }}/active">
-      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/accounts">
-      <input type="hidden" name="active" value="{{ '0' if a.active else '1' }}">
-      <button>{{ "Pause" if a.active else "Resume" }}</button>
-    </form>
+    <span class="actions-row" style="margin-left: auto">
+      <form class="inline" method="post" action="/admin/accounts/{{ a.id }}/subscribe">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/accounts">
+        <button {% if r.demo or r.scraped %}disabled{% endif %}>Re-subscribe webhooks</button>
+      </form>
+      <form class="inline" method="post" action="/admin/accounts/{{ a.id }}/active">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/accounts">
+        <input type="hidden" name="active" value="{{ '0' if a.active else '1' }}">
+        <button>{{ "Pause" if a.active else "Resume" }}</button>
+      </form>
+    </span>
   </div>
 </div>
 {% else %}
-<div class="panel"><p>No accounts yet. Make a connect link above, or run <code>collector demo load</code> to try things out.</p></div>
+<div class="panel"><div class="empty">{{ icon("accounts") }}No accounts yet. Make a connect link above, or run <code>collector demo load</code> to try things out.</div></div>
 {% endfor %}
 <datalist id="categories"><option value="udaku"><option value="football"><option value="media"><option value="music"></datalist>
 {% endblock %}

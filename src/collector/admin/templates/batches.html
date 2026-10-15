@@ -1,11 +1,20 @@
 {% extends "base.html" %}
+{% from "_ui.html" import icon %}
 {% set title = "Batches" %}
 {% block content %}
-<h1>Labelling batches</h1>
+<div class="page-head">
+  <div>
+    <h1>Labelling batches</h1>
+    <p class="sub">Draw stratified samples of processed comments and export them for annotation.</p>
+  </div>
+</div>
 
 <div class="panel">
-  <h2>Draw a new batch</h2>
-  <p class="muted">{{ eligible }} processed comment(s) are eligible. A comment is never drawn into two batches.</p>
+  <div class="panel-head">
+    <h2>Draw a new batch</h2>
+    <span class="chip accent">{{ eligible }} eligible</span>
+  </div>
+  <p class="muted small" style="margin-top: -4px">A comment is never drawn into two batches.</p>
   <form class="row" method="post" action="/admin/batches">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/batches">
     <label>Name<input name="batch" required pattern="[\w.\-]{1,60}" placeholder="batch-1"></label>
@@ -18,22 +27,23 @@
   </form>
 </div>
 
-<div class="panel scroll">
+<div class="panel flush">
+  <div class="panel-head"><h2>Batches</h2></div>
   {% if batches %}
-  <table>
+  <div class="scroll" style="margin-top: 12px"><table>
     <tr><th>Batch</th><th class="num">Size</th><th>Strata</th><th>Exported</th><th>Download</th></tr>
     {% for b in batches %}
     <tr>
-      <td>{{ b.name }}</td>
+      <td><strong>{{ b.name }}</strong></td>
       <td class="num">{{ b.size }}</td>
-      <td>{% for s, n in b.strata|dictsort %}<span class="chip">{{ s }} {{ n }}</span>{% endfor %}</td>
-      <td>{{ "yes" if b.exported else "no" }}</td>
-      <td><a href="/admin/batches/{{ b.name|urlencode }}/export?fmt=csv">CSV</a> ·
-          <a href="/admin/batches/{{ b.name|urlencode }}/export?fmt=jsonl">JSONL</a></td>
+      <td>{% for s, n in b.strata|dictsort %}<span class="chip">{{ s }} <b>{{ n }}</b></span>{% endfor %}</td>
+      <td>{% if b.exported %}<span class="pill status-done">yes</span>{% else %}<span class="pill">no</span>{% endif %}</td>
+      <td class="nowrap"><a class="btn sm" href="/admin/batches/{{ b.name|urlencode }}/export?fmt=csv">CSV</a>
+          <a class="btn sm" href="/admin/batches/{{ b.name|urlencode }}/export?fmt=jsonl">JSONL</a></td>
     </tr>
     {% endfor %}
-  </table>
-  {% else %}<p class="muted">No batches yet.</p>{% endif %}
+  </table></div>
+  {% else %}<div class="empty">{{ icon("batches") }}No batches yet.</div>{% endif %}
 </div>
-<p class="muted">Exports mask @mentions, links and emails, and contain no commenter identifiers.</p>
+<p class="note">Exports mask @mentions, links and emails, and contain no commenter identifiers.</p>
 {% endblock %}

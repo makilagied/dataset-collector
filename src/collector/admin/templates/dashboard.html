@@ -1,59 +1,71 @@
 {% extends "base.html" %}
+{% from "_ui.html" import icon %}
 {% set title = "Overview" %}
 {% block content %}
-<h1>Overview</h1>
+<div class="page-head">
+  <div>
+    <h1>Overview</h1>
+    <p class="sub">What has been collected so far, and how much of it is ready to sample for labelling.</p>
+  </div>
+  <div class="actions-row">
+    <form class="inline" method="post" action="/admin/process">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin">
+      <button class="primary">Process new comments</button>
+    </form>
+  </div>
+</div>
 
+{% set processed_pct = (stats.processed / stats.comments * 100) if stats.comments else 0 %}
 <div class="cards">
   <div class="card"><div class="l">Accounts</div><div class="n">{{ stats.accounts|length }}</div></div>
   <div class="card"><div class="l">Comments</div><div class="n">{{ stats.comments }}</div></div>
-  <div class="card"><div class="l">Processed</div><div class="n">{{ stats.processed }}</div></div>
+  <div class="card"><div class="l">Processed</div><div class="n">{{ stats.processed }}</div>
+    <div class="bar" title="{{ '%.0f'|format(processed_pct) }}% processed"><span style="width: {{ '%.1f'|format(processed_pct) }}%"></span></div></div>
   <div class="card"><div class="l">Eligible</div><div class="n">{{ stats.eligible }}</div></div>
-  <div class="card"><div class="l">Lexicon hits</div><div class="n">{{ stats.hits }}</div></div>
-  <div class="card"><div class="l">Hit rate</div><div class="n">{{ "%.1f"|format(stats.hit_rate * 100) }}%</div></div>
+  <div class="card danger"><div class="l">Lexicon hits</div><div class="n">{{ stats.hits }}</div></div>
+  <div class="card accent"><div class="l">Hit rate</div><div class="n">{{ "%.1f"|format(stats.hit_rate * 100) }}%</div>
+    <div class="bar"><span style="width: {{ '%.1f'|format(stats.hit_rate * 100) }}%"></span></div></div>
 </div>
 
-<div class="panel">
-  <h2>Actions</h2>
-  {% if unprocessed %}
-    <p><strong>{{ unprocessed }}</strong> comment(s) not processed yet.</p>
-  {% endif %}
-  <form class="inline" method="post" action="/admin/process">
-    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin">
-    <button class="primary">Process new comments</button>
-  </form>
-  <form class="inline" method="post" action="/admin/process">
-    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin">
-    <input type="hidden" name="all" value="1">
-    <button>Reprocess everything</button>
-  </form>
-  <form class="inline" method="post" action="/admin/tokens/refresh">
-    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin">
-    <button>Refresh expiring tokens</button>
-  </form>
-  <p class="muted">Backfills are started per account on the <a href="/admin/accounts">Accounts</a> page.</p>
-</div>
+{% if unprocessed %}
+<div class="flash info"><div><strong>{{ unprocessed }}</strong> comment(s) not processed yet. Process them so they show up in hits and batches.</div></div>
+{% endif %}
 
-<div class="row" style="align-items: stretch">
-  <div class="panel" style="flex: 1; min-width: 260px">
-    <h2>Languages <span class="muted">(eligible comments)</span></h2>
-    {% for lang, n in stats.languages.items() %}<span class="chip">{{ lang }} {{ n }}</span>{% else %}<span class="muted">—</span>{% endfor %}
+<div class="grid-2">
+  <div class="panel">
+    <h2>Actions</h2>
+    <div class="actions-row">
+      <form class="inline" method="post" action="/admin/process">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin">
+        <input type="hidden" name="all" value="1">
+        <button>Reprocess everything</button>
+      </form>
+      <form class="inline" method="post" action="/admin/tokens/refresh">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin">
+        <button>Refresh expiring tokens</button>
+      </form>
+    </div>
+    <p class="muted small" style="margin-top: 12px">Backfills are started per account on the <a href="/admin/accounts">Accounts</a> page;
+      public comments come from <a href="/admin/scrape">Scrape</a>.</p>
   </div>
-  <div class="panel" style="flex: 1; min-width: 260px">
-    <h2>Excluded from sampling</h2>
-    {% for reason, n in stats.excluded.items() %}<span class="chip">{{ reason }} {{ n }}</span>{% else %}<span class="muted">—</span>{% endfor %}
+  <div class="panel">
+    <h2>Languages <span class="muted" style="font-weight: 400">· eligible comments</span></h2>
+    {% for lang, n in stats.languages.items() %}<span class="chip accent">{{ lang }} <b>{{ n }}</b></span>{% else %}<span class="muted">—</span>{% endfor %}
+    <h2 style="margin-top: 18px">Excluded from sampling</h2>
+    {% for reason, n in stats.excluded.items() %}<span class="chip">{{ reason }} <b>{{ n }}</b></span>{% else %}<span class="muted">—</span>{% endfor %}
   </div>
 </div>
 
-<div class="panel">
-  <h2>Recent jobs <a class="muted" href="/admin/jobs" style="font-weight: 400">all jobs →</a></h2>
+<div class="panel flush">
+  <div class="panel-head"><h2>Recent jobs</h2><a class="links" href="/admin/jobs">All jobs →</a></div>
   {% if recent_jobs %}
-  <div class="scroll"><table>
+  <div class="scroll" style="margin-top: 12px"><table>
     <tr><th>#</th><th>Job</th><th>Status</th><th>Started</th><th>Result</th></tr>
     {% for j in recent_jobs %}
-    <tr><td>{{ j.id }}</td><td>{{ j.kind }}</td><td class="status-{{ j.status }}">{{ j.status }}</td>
-        <td>{{ j.created_at|dt }}</td><td class="text">{{ j.error or j.result or "" }}</td></tr>
+    <tr><td class="id">{{ j.id }}</td><td>{{ j.kind }}</td><td><span class="pill status-{{ j.status }}">{{ j.status }}</span></td>
+        <td class="nowrap">{{ j.created_at|dt }}</td><td class="text">{{ j.error or j.result or "" }}</td></tr>
     {% endfor %}
   </table></div>
-  {% else %}<p class="muted">No jobs yet.</p>{% endif %}
+  {% else %}<div class="empty">{{ icon("empty") }}No jobs yet.</div>{% endif %}
 </div>
 {% endblock %}

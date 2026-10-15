@@ -1,68 +1,73 @@
 {% extends "base.html" %}
+{% from "_ui.html" import icon %}
 {% set title = "Posts" %}
 {% block content %}
-<h1>Posts</h1>
-
-<form class="panel row" method="get" action="/admin/posts">
-  <label>Account
-    <select name="account">
-      <option value="">All accounts</option>
-      {% for a in accounts %}<option value="{{ a.id }}" {% if account == a.id %}selected{% endif %}>@{{ a.username }}</option>{% endfor %}
-    </select>
-  </label>
-  <button class="primary">Show</button>
-</form>
+<div class="page-head">
+  <div>
+    <h1>Posts</h1>
+    <p class="sub">Posts per account, and how many of their comments were actually collected.</p>
+  </div>
+  <form class="row" method="get" action="/admin/posts">
+    <label>Account
+      <select name="account">
+        <option value="">All accounts</option>
+        {% for a in accounts %}<option value="{{ a.id }}" {% if account == a.id %}selected{% endif %}>@{{ a.username }}</option>{% endfor %}
+      </select>
+    </label>
+    <button class="primary">Show</button>
+  </form>
+</div>
 
 <div class="cards">
   <div class="card"><div class="l">Posts</div><div class="n">{{ n_posts }}</div></div>
   <div class="card"><div class="l">Comments (Instagram count)</div><div class="n">{{ reported }}</div></div>
   <div class="card"><div class="l">Comments collected</div><div class="n">{{ collected }}</div></div>
-  <div class="card"><div class="l">Not collected</div><div class="n">{{ missing }}</div></div>
+  <div class="card {{ 'danger' if missing else '' }}"><div class="l">Not collected</div><div class="n">{{ missing }}</div></div>
 </div>
 
 {% if missing %}
-<div class="flash warn">
+<div class="flash warn"><div>
   {{ missing }} comment(s) that Instagram counts on these posts were not collected.
   First run a <strong>Backfill</strong> on the <a href="/admin/accounts">Accounts</a> page.
   If the gap stays, Instagram is withholding them: while the Meta app is in
   <strong>Development mode</strong>, comments from people who have no role on the app are hidden.
   Switching the app to <strong>Live mode</strong> fixes this.
-</div>
+</div></div>
 {% endif %}
 
-<div class="panel scroll">
+<div class="panel flush">
   {% if rows %}
-  <table>
+  <div class="scroll"><table>
     <tr><th>Posted</th><th>Account</th><th>Caption</th><th>Type</th>
         <th class="num">Instagram count</th><th class="num">Collected</th><th class="num">Hits</th>
         <th class="num">Unprocessed</th><th>Last backfill</th><th></th></tr>
     {% for m, username, n_collected, n_hits, n_unprocessed in rows %}
     {% set gap = (m.comments_count or 0) - n_collected %}
     <tr class="{{ 'hit' if gap > 0 else '' }}">
-      <td style="white-space: nowrap">{{ m.posted_at|dt }}</td>
-      <td>@{{ username }}</td>
+      <td class="nowrap muted">{{ m.posted_at|dt }}</td>
+      <td class="nowrap">@{{ username }}</td>
       <td class="text">{{ (m.caption or "")|truncate(90) if m.caption else "—" }}</td>
-      <td>{{ (m.media_type or "?")|lower }}</td>
+      <td><span class="chip">{{ (m.media_type or "?")|lower }}</span></td>
       <td class="num">{{ m.comments_count if m.comments_count is not none else "—" }}</td>
-      <td class="num">{{ n_collected }}{% if gap > 0 %} <span class="chip">−{{ gap }}</span>{% endif %}</td>
-      <td class="num">{{ n_hits }}</td>
+      <td class="num">{{ n_collected }}{% if gap > 0 %} <span class="chip err">−{{ gap }}</span>{% endif %}</td>
+      <td class="num"><strong>{{ n_hits }}</strong></td>
       <td class="num">{{ n_unprocessed or "" }}</td>
-      <td style="white-space: nowrap">{{ m.last_synced_at|dt }}</td>
-      <td style="white-space: nowrap">
+      <td class="nowrap muted">{{ m.last_synced_at|dt }}</td>
+      <td class="nowrap">
         <a href="/admin/comments?media={{ m.id }}">comments →</a>
         {% if m.permalink and m.permalink.startswith("https://") %}
           · <a href="{{ m.permalink }}" target="_blank" rel="noopener noreferrer">post ↗</a>{% endif %}
       </td>
     </tr>
     {% endfor %}
-  </table>
+  </table></div>
   <div class="pager">
-    {% if page > 1 %}<a href="{{ page_url(page - 1) }}">← Newer</a>{% endif %}
+    <span>{% if page > 1 %}<a class="btn sm" href="{{ page_url(page - 1) }}">← Newer</a>{% endif %}</span>
     <span class="muted">Page {{ page }} of {{ pages }}</span>
-    {% if page < pages %}<a href="{{ page_url(page + 1) }}">Older →</a>{% endif %}
+    <span>{% if page < pages %}<a class="btn sm" href="{{ page_url(page + 1) }}">Older →</a>{% endif %}</span>
   </div>
-  {% else %}<p class="muted">No posts yet. Run a Backfill on the <a href="/admin/accounts">Accounts</a> page.</p>{% endif %}
+  {% else %}<div class="empty">{{ icon("posts") }}No posts yet. Run a Backfill on the <a href="/admin/accounts">Accounts</a> page.</div>{% endif %}
 </div>
-<p class="muted">"Instagram count" is the <code>comments_count</code> Instagram reported at the last backfill
+<p class="note">"Instagram count" is the <code>comments_count</code> Instagram reported at the last backfill
   (it includes replies). Highlighted rows have comments that were not collected.</p>
 {% endblock %}
