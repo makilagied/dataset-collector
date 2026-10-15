@@ -259,3 +259,10 @@ def normalize(text: str) -> str:
     for step in STEPS:
         text = step(text)
     return " ".join(text.split())
+
+
+def normalize_plain(text: str) -> str:
+    """Every step except Swahili shorthand: the form English words are matched in."""
+    for step in STEPS[:-1]:
+        text = step(text)
+    return " ".join(text.split())

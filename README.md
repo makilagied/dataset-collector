@@ -5,7 +5,8 @@ Instagram API (Business Login for Instagram). It detects abusive Swahili words w
 obfuscated forms (`M.J.1.N.G.@`, `mjiiinga`, `мjіngа`, `mjnga`). It then exports a
 stratified, anonymized sample for human labelling.
 
-- Official API only: no scraping, no unofficial libraries, no browser automation.
+- Two sources: the official API for consenting accounts, and an optional browser scraper
+  for public Instagram and Facebook comments (see [Scraping](#scraping-public-comments)).
 - Commenter usernames and IDs are never stored. They are HMAC-hashed at ingestion.
 - Access tokens are encrypted at rest. Secrets come only from environment variables.
 
@@ -138,6 +139,9 @@ With a local install, run `collector <command>` instead.
 | `export --batch NAME [--format csv\|jsonl] [--out PATH]` | Write the batch with mentions, URLs and emails masked |
 | `stats` | Per-account counts, abuse-hit rate, language split, exclusions, batches |
 | `demo load` / `demo remove` | Synthetic demo account (no Meta app needed) |
+| `scrape login instagram\|facebook` | Log in by hand in a browser window; the session is kept |
+| `scrape instagram TARGET...` | Scrape comments from `@user`, `#tag` or post URLs |
+| `scrape facebook TARGET...` | Scrape comments from page / group URLs or post URLs |
 
 Web endpoints:
 
@@ -235,10 +239,86 @@ Meta's webhook calls are not affected.
 **Webhooks from a Facebook Login app** (optional): set `FB_APP_SECRET` to that app's
 secret. Its webhooks are signed with it, and both payload shapes are accepted.
 
+## Scraping public comments
+
+`collector scrape` reads public comments from Instagram and Facebook through a real,
+logged-in Chromium window. No Meta app or account-owner consent is involved. Scraped
+sources become accounts named `scrape:ig:<name>` or `scrape:fb:<name>`, and their comments
+have `source = 'scrape'`. From there they go through `process` → `sample` → `export`
+like any other comments. Commenter IDs are HMAC-hashed and never stored.
+
+**Before you use it, know that:**
+- Scraping, especially while logged in, breaks Instagram's and Facebook's Terms of Use.
+  The account you log in with can be checkpointed or banned. Use a separate account,
+  not your personal one.
+- The scraper depends on undocumented site internals and button labels. Expect to fix
+  it when the sites change. All site-specific code is in
+  [src/collector/scrape/instagram.py](src/collector/scrape/instagram.py) and
+  [src/collector/scrape/facebook.py](src/collector/scrape/facebook.py).
+- Scraped data has no consent behind it. Check with your ethics board how it may be used
+  and shared before you publish anything built from it.
+
+**Setup.** This runs on the host, not in Docker, because it needs a visible browser. It
+uses the `DATABASE_URL` in `.env` (`localhost:5432`, which the compose `db` exposes).
+
+```bash
+pip install -e ".[scrape]"
+python -m playwright install chromium
+collector scrape login instagram     # log in in the window; it closes by itself
+collector scrape login facebook      # set the account's Facebook language to English
+```
+
+The session is saved in `.scrape-profile/` (git-ignored). It holds live logins, so don't
+share it.
+
+**From the dashboard.** Run `collector ui` on the host and open
+<http://127.0.0.1:8001/admin/scrape>. The Scrape page logs in, starts Instagram or Facebook
+scrapes (same options as the commands below, plus "process new comments when finished"),
+shows progress, and lists the scraped sources. Scrapes run as background jobs one at a
+time, so a long scrape holds back other jobs until it ends. The Docker dashboard on port
+8000 shows the same page but can't open a browser, so it only tells you to use `collector ui`.
+
+**Examples.**
+
+```bash
+# 30 newest posts of two profiles, filed under category "udaku"
+collector scrape instagram @someprofile @otherprofile --max-posts 30 --category udaku
+# posts under a hashtag
+collector scrape instagram "#udaku"
+# one post
+collector scrape instagram https://www.instagram.com/p/SHORTCODE/
+# a Facebook page's recent posts, or one post
+collector scrape facebook https://www.facebook.com/somepage --max-posts 10
+collector scrape facebook https://www.facebook.com/somepage/posts/pfbid0...
+```
+
+**Only hits are stored**, from every source: scraping, API backfill and webhooks
+(`STORE_ONLY_HITS=true`, the default). A hit is a comment with a word from the Swahili
+([sw_roots.yaml](src/collector/data/sw_roots.yaml)) or English
+([en_roots.yaml](src/collector/data/en_roots.yaml)) lexicon, in any disguised spelling,
+scoring at least 0.5. Words that are only insults when aimed at someone ("dog", "ugly",
+"mbwa") need a "you"/"wewe" nearby. Other comments are read and dropped, and runs report
+how many. To catch a new word, add it to the lexicon. Set `STORE_ONLY_HITS=false` in `.env`
+to store every comment again. Without it, a labelling batch's `random` and `model` strata
+can only draw from hits. English words are matched before the Swahili shorthand step, which
+would otherwise rewrite them ("fuck" -> "fusik"). Typo matching only accepts keyboard-style
+typos ("malayq"), because a free one-letter change is usually a different real word
+("mabaya" is not "malaya"). Mistakes found in real comments are kept as regression tests in
+[reviewed_comments.yaml](tests/fixtures/reviewed_comments.yaml). The
+scraper waits about `--delay` seconds (default 4, randomized) between requests. A rerun
+skips posts whose comment count hasn't changed, unless you pass `--refresh`. If the site
+asks for a login or a checkpoint, or starts rate limiting, the run stops with exit code 2.
+Everything scraped so far is kept. Clear the challenge in the window (or with
+`scrape login`) and wait a while before you run it again.
+
+Limits: Instagram hashtag targets return only the posts the tag page shows (top and
+recent, a few dozen). Facebook posts carry no post date, so `--since` applies to
+Instagram only.
+
 ## Consent
 
-Only accounts whose owners have completed the OAuth flow **and** signed a consent form are
-collected. A draft form is in [docs/consent-template.md](docs/consent-template.md). Have it
+Accounts collected through the API are only those whose owners have completed the OAuth
+flow **and** signed a consent form (scraped sources have no consent; see above). A draft form is in [docs/consent-template.md](docs/consent-template.md). Have it
 reviewed by your ethics board and legal counsel before use. Pass the signed form's
 reference as `consent_ref` on `/connect`, so each account row records its consent.
 

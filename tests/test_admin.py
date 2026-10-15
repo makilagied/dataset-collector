@@ -388,3 +388,49 @@ def test_create_and_download_batch(client: TestClient, db: Session) -> None:
 def test_batch_validation(client: TestClient, db: Session, form: dict[str, str]) -> None:
     status, location = post(client, "/admin/batches", **form)
     assert status == 303 and "kind=error" in location
+
+
+# --- posts ---------------------------------------------------------------------------------
+
+
+def test_posts_page_shows_reported_vs_collected(client: TestClient, db: Session) -> None:
+    acct, _ = load_demo(db)
+    process(db, detector=HeuristicDetector())
+    # Like a real Development-mode app: Instagram says 3 comments, none were returned.
+    db.add(
+        Media(
+            ig_media_id="M-hidden",
+            account_id=acct.id,
+            caption="Picha yangu mpya",
+            comments_count=3,
+            media_type="IMAGE",
+        )
+    )
+    db.commit()
+
+    page = client.get(f"/admin/posts?account={acct.id}").text
+    assert "Picha yangu mpya" in page and "Mechi ya leo" in page
+    assert ">4</div>" in page  # posts card: 3 demo posts + 1
+    assert "−3" in page  # per-row gap chip for the post with hidden comments
+    assert "Development mode" in page  # explanation shown when comments are missing
+    assert 'href="/admin/comments?media=' in page
+
+
+def test_posts_page_empty_and_nav(client: TestClient) -> None:
+    page = client.get("/admin/posts").text
+    assert "No posts yet" in page
+    assert 'href="/admin/posts"' in client.get("/admin").text
+
+
+def test_comments_filtered_by_post(client: TestClient, db: Session) -> None:
+    load_demo(db)
+    process(db, detector=HeuristicDetector())
+    m3 = db.scalars(select(Media).where(Media.ig_media_id == "demo-M3")).one()
+
+    page = client.get(f"/admin/comments?media={m3.id}").text
+    assert "Showing comments on one post" in page
+    assert "unakula kama nguruwe" in page and "malaya tu huyu" not in page  # M2 comment
+    assert f'name="media" value="{m3.id}"' in page  # filter survives re-filtering
+
+    csv_text = client.get(f"/admin/comments/export?fmt=csv&media={m3.id}").content.decode()
+    assert "unakula kama nguruwe" in csv_text and "malaya tu huyu" not in csv_text

@@ -128,7 +128,7 @@ def test_admin_download(demo: Session, engine: Engine, monkeypatch: pytest.Monke
         client = TestClient(app)
         client.auth = ("admin", "pw")
         page = client.get("/admin/comments?show=hits").text
-        assert "/admin/comments/export?account=&amp;show=hits&amp;q=&amp;fmt=csv" in page
+        assert "/admin/comments/export?account=&amp;show=hits&amp;q=&amp;media=&amp;fmt=csv" in page
 
         resp = client.get("/admin/comments/export?fmt=csv&show=all")
         assert resp.status_code == 200

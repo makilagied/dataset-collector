@@ -2,17 +2,24 @@
 
 1. regex    - optional prefix + root, repeated letters, junk between letters
 2. skeleton - dropped vowels ("mjng" for "mjinga"); roots with 3+ consonants only
-3. fuzzy    - rapidfuzz Levenshtein on the root part of a token (prefix must be exact),
-              threshold scaled by root length
+3. fuzzy    - typos in the root part of a token (prefix must be exact), up to a
+              length-scaled number of edits. Only typo-like edits count: a neighbouring
+              keyboard key ("malayq"), two swapped letters ("mjigna"), or a doubled /
+              undoubled letter. Any other one-letter change is usually a different real
+              word ("mabaya" is not "malaya", "ndani" is not "nyani"); checked 2026-10-15
+              against scraped comments, where 12 of 14 unrestricted fuzzy matches were wrong.
 
 Allowlisted words never match. @mentions and URLs are skipped. Context-dependent roots
 (animal words) count as hits only near a second-person cue ("wewe ni mbwa").
+
+English roots (lang "en") are matched against `text_plain`, the text normalized without
+Swahili shorthand, because shorthand rewrites English spellings ("fuck" -> "fusik").
 """
 
 import re
 from dataclasses import dataclass, field
 
-from rapidfuzz.distance import Levenshtein
+from rapidfuzz.distance import OSA, Levenshtein
 
 from collector.nlp.lexicon import VOWELS, Lexicon, Root, load_lexicon, skeleton
 from collector.nlp.normalize import is_protected
@@ -73,6 +80,44 @@ class MatchResult:
         return max((m.score for m in self.matches), default=0.0)
 
 
+# QWERTY rows, each shifted half a key: neighbours are 1 apart in a row, 0.5 across rows.
+_ROWS = ("qwertyuiop", "asdfghjkl", "zxcvbnm")
+_KEYS = {
+    ch: (col + row * 0.5, row) for row, keys in enumerate(_ROWS) for col, ch in enumerate(keys)
+}
+
+
+def keyboard_adjacent(a: str, b: str) -> bool:
+    if a == b or a not in _KEYS or b not in _KEYS:
+        return False
+    (ax, ay), (bx, by) = _KEYS[a], _KEYS[b]
+    dx, dy = abs(ax - bx), abs(ay - by)
+    return (dy == 0 and dx == 1) or (dy == 1 and dx == 0.5)
+
+
+def typo_like(word: str, target: str, limit: int) -> bool:
+    """True if `word` is `target` with at most `limit` typo-like edits (see module doc)."""
+    if word == target:
+        return False
+    if OSA.distance(word, target) == 1 and Levenshtein.distance(word, target) == 2:
+        return True  # one swap of neighbouring letters
+    ops = Levenshtein.editops(word, target)
+    if len(ops) > limit:
+        return False
+    for op in ops:
+        if op.tag == "replace":
+            ok = keyboard_adjacent(word[op.src_pos], target[op.dest_pos])
+        elif op.tag == "delete":  # word has an extra letter: only a doubled one
+            ch, i = word[op.src_pos], op.src_pos
+            ok = (i > 0 and word[i - 1] == ch) or (i + 1 < len(word) and word[i + 1] == ch)
+        else:  # insert: word lacks a letter: only one of a double
+            ch, i = target[op.dest_pos], op.dest_pos
+            ok = (i > 0 and target[i - 1] == ch) or (i + 1 < len(target) and target[i + 1] == ch)
+        if not ok:
+            return False
+    return True
+
+
 def _is_subsequence(short: str, long: str) -> bool:
     it = iter(long)
     return all(ch in it for ch in short)
@@ -92,18 +137,21 @@ def _fuzzy_match(token: str, root: Root) -> bool:
     edits from "makahaba", "mamako" (your mother) one from "matako".
     """
     limit = max_edits(len(root.root))
-    if limit == 0:
+    if limit == 0 or not root.fuzzy:
         return False
     for prefix in root.prefixes:
         if not token.startswith(prefix):
             continue
-        rest = token[len(prefix) :]
-        if not rest or abs(len(rest) - len(root.root)) > limit:
-            continue
-        if not prefix and rest[0] != root.root[0]:
-            continue  # a bare form is anchored by its first letter instead
-        if 0 < Levenshtein.distance(rest, root.root, score_cutoff=limit) <= limit:
-            return True
+        for suffix in root.suffixes:
+            if suffix and not token.endswith(suffix):
+                continue
+            rest = token[len(prefix) : len(token) - len(suffix)]
+            if not rest or abs(len(rest) - len(root.root)) > limit:
+                continue
+            if not prefix and rest[0] != root.root[0]:
+                continue  # a bare form is anchored by its first letter instead
+            if typo_like(rest, root.root, limit):
+                return True
     return False
 
 
@@ -121,21 +169,35 @@ def _match_root(root: Root, raw_token: str, words: list[str]) -> tuple[str, str]
     return None
 
 
-def match(text_norm: str, lexicon: Lexicon | None = None) -> MatchResult:
+def _words(tokens: list[str]) -> list[list[str]]:
+    """Letter-only words per whitespace token, for cue detection and fuzzy/skeleton."""
+    return [[] if is_protected(t) else _LETTERS.findall(t) for t in tokens]
+
+
+def match(
+    text_norm: str, lexicon: Lexicon | None = None, text_plain: str | None = None
+) -> MatchResult:
     lex = lexicon or load_lexicon()
     tokens = text_norm.split()
-    # Letter-only words per whitespace token, for cue detection and fuzzy/skeleton.
-    words_per_token = [[] if is_protected(t) else _LETTERS.findall(t) for t in tokens]
+    plain = text_plain.split() if text_plain is not None else tokens
+    if len(plain) != len(tokens):  # shorthand never splits tokens; be safe anyway
+        plain = tokens
+    views = {"sw": (tokens, _words(tokens)), "en": (plain, _words(plain))}
     cue_positions = {
-        i for i, words in enumerate(words_per_token) if any(lex.is_cue(w) for w in words)
+        i
+        for _, words_per_token in views.values()
+        for i, words in enumerate(words_per_token)
+        if any(lex.is_cue(w) for w in words)
     }
 
     result = MatchResult()
-    for i, token in enumerate(tokens):
-        words = [w for w in words_per_token[i] if w not in lex.allowlist]
-        if not words:  # protected, punctuation-only, or allowlisted
-            continue
+    for i in range(len(tokens)):
         for root in lex.roots:
+            view_tokens, words_per_token = views["en" if root.lang == "en" else "sw"]
+            token = view_tokens[i]
+            words = [w for w in words_per_token[i] if w not in lex.allowlist]
+            if not words:  # protected, punctuation-only, or allowlisted
+                continue
             found = _match_root(root, token, words)
             if found is None:
                 continue

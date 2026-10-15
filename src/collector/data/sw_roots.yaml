@@ -42,8 +42,9 @@ roots:
      notes: "homophobic slur; on the coast also 'female friend'"}
   - {root: kuma, prefixes: [""], severity: high, context_dependent: false,
      notes: "vulgar (genitals)"}
-  - {root: kumamako, prefixes: [""], severity: high, context_dependent: false,
-     notes: "vulgar insult directed at someone's mother"}
+  - {root: kumama, prefixes: [""], suffixes: [ko, ke, yako, yake, ye, enu], severity: high,
+     context_dependent: false,
+     notes: "vulgar insult directed at someone's mother (kumamako, kumamake: his/her mother's)"}
   - {root: kundu, prefixes: [m, mi], severity: high, context_dependent: false,
      notes: "vulgar (anus) - mkundu"}
   - {root: tako, prefixes: [ma], severity: medium, context_dependent: false,
@@ -73,6 +74,20 @@ roots:
 
 # Innocent words that collide with roots (by fuzzy or skeleton matching). Never matched.
 allowlist:
+  # Real words found one letter away from a root in scraped comments (reviewed 2026-10-15).
+  - ndani       # inside (nyani)
+  - nani        # who (nyani)
+  - mabaya      # bad (malaya)
+  - mwenge      # torch, Uhuru Torch (msenge)
+  - msonge      # (msenge)
+  - wasonge     # (wasenge)
+  - mkinga      # Mkinga district (mjinga)
+  - wakinga
+  - mzinga      # beehive / cannon; bata mzinga = turkey (mjinga)
+  - majina      # names (majinga)
+  - wajiunga    # they join (wajinga)
+  - mkungu      # (mkundu)
+  - kinyemi     # (kinyesi)
   - jenga
   - mjenga
   - wajenga

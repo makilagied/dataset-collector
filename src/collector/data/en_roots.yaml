@@ -1,0 +1,100 @@
+# Seed lexicon of abusive English words, as used in East African comment sections.
+#
+# TODO(reviewers): THIS IS A SEED LIST, NOT A REVIEWED LEXICON. Check every entry
+# (severity, context_dependent, affixes) and add what you see in real comments.
+#
+# Same fields as sw_roots.yaml, plus
+#   suffixes   allowed endings; "" means the bare word also matches ("idiot", "idiots")
+#
+# English words are matched in text normalized WITHOUT the Swahili shorthand step, so
+# "fuck" is not rewritten to "fusik". Obfuscation is still undone first: "f*ck", "f.u.c.k",
+# "FUUUCK", "b!tch", "sh1t", "a s s h o l e" all match. Dropped vowels ("fck", "btch")
+# match through the skeleton method. Typo (fuzzy) matching is off: in English it flags
+# innocent words ("batch" for "bitch", "idiom" for "idiot").
+
+language: en
+defaults:
+  fuzzy: false
+
+roots:
+  # --- profanity / sexual insults -------------------------------------------------------
+  - {root: fuck, prefixes: ["", mother, motha, mutha], severity: medium,
+     suffixes: ["", s, ed, er, ers, ing, in, face, head, tard, boy, wit],
+     context_dependent: false, notes: "also motherfucker"}
+  - {root: shit, prefixes: ["", dip, bull], suffixes: ["", s, ty, head, face, hole, bag],
+     severity: medium, context_dependent: true,
+     notes: "an expletive on its own; abusive when aimed at someone (you shit, u shitty)"}
+  - {root: bitch, suffixes: ["", es, y, ass], severity: medium, context_dependent: false}
+  - {root: bastard, suffixes: ["", s], severity: medium, context_dependent: false}
+  - {root: asshole, suffixes: ["", s], severity: medium, context_dependent: false}
+  - {root: ass, prefixes: [dumb, jack, fat, smart, kiss], suffixes: ["", es],
+     severity: medium, context_dependent: false, notes: "bare 'ass' left out (kick ass)"}
+  - {root: cunt, suffixes: ["", s], severity: high, context_dependent: false}
+  - {root: dick, suffixes: ["", s, head, heads, face], severity: medium,
+     context_dependent: false}
+  - {root: cock, suffixes: [sucker, suckers, head], severity: high, context_dependent: false,
+     notes: "bare 'cock' left out (rooster)"}
+  - {root: pussy, suffixes: [""], severity: medium, context_dependent: true}
+  - {root: whore, suffixes: ["", s], severity: high, context_dependent: false}
+  - {root: slut, suffixes: ["", s, ty], severity: high, context_dependent: false}
+  - {root: prostitute, suffixes: ["", s], severity: high, context_dependent: false}
+  - {root: twat, suffixes: ["", s], severity: high, context_dependent: false}
+  - {root: wanker, suffixes: ["", s], severity: high, context_dependent: false}
+
+  # --- intelligence / worth ---------------------------------------------------------------
+  - {root: idiot, suffixes: ["", s, ic], severity: medium, context_dependent: false}
+  - {root: stupid, suffixes: ["", s, ity], severity: medium, context_dependent: false}
+  - {root: moron, suffixes: ["", s, ic], severity: medium, context_dependent: false}
+  - {root: imbecile, suffixes: ["", s], severity: medium, context_dependent: false}
+  - {root: retard, suffixes: ["", s, ed], severity: high, context_dependent: false}
+  - {root: dumb, suffixes: ["", b], severity: medium, context_dependent: true}
+  - {root: fool, suffixes: ["", s, ish], severity: medium, context_dependent: true}
+  - {root: loser, suffixes: ["", s], severity: medium, context_dependent: true}
+  - {root: useless, severity: medium, context_dependent: true}
+  - {root: worthless, severity: medium, context_dependent: true}
+  - {root: ugly, severity: medium, context_dependent: true}
+  - {root: trash, suffixes: ["", y], severity: medium, context_dependent: true}
+  - {root: scum, suffixes: ["", bag, bags], severity: medium, context_dependent: false}
+  - {root: jerk, suffixes: ["", s], severity: medium, context_dependent: true}
+  - {root: clown, suffixes: ["", s], severity: medium, context_dependent: true}
+
+  # --- slurs ---------------------------------------------------------------------------------
+  - {root: nigger, suffixes: ["", s], severity: high, context_dependent: false}
+  - {root: nigga, suffixes: ["", s, z], severity: high, context_dependent: true,
+     notes: "often friendly between fans; a hit only when aimed (you nigga)"}
+  - {root: faggot, suffixes: ["", s], severity: high, context_dependent: false}
+  - {root: fag, suffixes: ["", s], severity: high, context_dependent: true,
+     notes: "also British for cigarette"}
+
+  # --- animals (only abusive when aimed at someone) ------------------------------------------
+  - {root: dog, suffixes: ["", s], severity: medium, context_dependent: true}
+  - {root: pig, suffixes: ["", s], severity: medium, context_dependent: true}
+  - {root: monkey, suffixes: ["", s], severity: high, context_dependent: true,
+     notes: "racist when aimed at a Black person"}
+  - {root: ape, suffixes: ["", s], severity: high, context_dependent: true}
+  - {root: baboon, suffixes: ["", s], severity: high, context_dependent: true}
+  - {root: donkey, suffixes: ["", s], severity: medium, context_dependent: true}
+  - {root: cow, suffixes: ["", s], severity: medium, context_dependent: true}
+  - {root: goat, suffixes: ["", s], severity: medium, context_dependent: true}
+  - {root: rat, suffixes: ["", s], severity: medium, context_dependent: true}
+  - {root: snake, suffixes: ["", s], severity: medium, context_dependent: true}
+
+  # --- abbreviations ----------------------------------------------------------------------
+  - {root: stfu, severity: medium, context_dependent: false}
+  - {root: gtfo, severity: medium, context_dependent: false}
+  - {root: kys, severity: high, context_dependent: false, notes: "kill yourself"}
+
+# Real words the skeleton method could mistake for a root.
+allowlist:
+  - cocktail
+  - cockpit
+  - dickens
+  - shiitake
+  - doge
+  - piggy
+  - bitcoin
+
+# Words that point an insult at the reader (merged with the Swahili cues).
+second_person_cues:
+  # Not "ya" or "yu": in Swahili they mean "of" and "he/she is".
+  words: [you, u, ur, your, youre, yall, thou, ure]

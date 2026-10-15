@@ -8,7 +8,7 @@ Collect comments from consenting Instagram professional accounts through the off
 
 ## 2. Hard constraints
 
-- Official API only. No scraping, no unofficial libraries (instaloader, instagrapi and similar), no browser automation.
+- Official API for consenting accounts. (Changed 2026-10-14: an optional browser scraper for public Instagram/Facebook comments was added as a second source; see README, "Scraping public comments".)
 - Only collect from accounts that completed the OAuth flow.
 - Never store a raw commenter username or ID. Hash at ingestion with HMAC-SHA256 and a secret key.
 - Access tokens are encrypted at rest (Fernet). Secrets come from environment variables only.

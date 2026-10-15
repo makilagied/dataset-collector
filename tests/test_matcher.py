@@ -4,7 +4,7 @@ import pytest
 import yaml
 
 from collector.nlp import lexicon as lx
-from collector.nlp.matcher import match, max_edits
+from collector.nlp.matcher import keyboard_adjacent, match, max_edits, typo_like
 from collector.nlp.normalize import normalize
 from tests.conftest import REPORT
 
@@ -61,7 +61,7 @@ def test_precision_recall() -> None:
         ("mj#inga", "jinga", "regex"),
         ("mjnga", "jinga", "skeleton"),
         ("mpmbv", "pumbavu", "skeleton"),
-        ("mujinga", "jinga", "fuzzy"),
+        ("mjihga", "jinga", "fuzzy"),
         ("mpumbafu", "pumbavu", "fuzzy"),
     ],
 )
@@ -157,3 +157,43 @@ def test_load_from_path(tmp_path: Path) -> None:
 def test_invalid_lexicon(raw: dict[str, object], error: str) -> None:
     with pytest.raises(lx.LexiconError, match=error):
         lx.parse_lexicon(raw)
+
+
+# --- reviewed real comments -------------------------------------------------------------
+
+REVIEWED = yaml.safe_load(
+    (Path(__file__).parent / "fixtures" / "reviewed_comments.yaml").read_text(encoding="utf-8")
+)
+
+
+@pytest.mark.parametrize("raw", REVIEWED["negative"])
+def test_reviewed_false_positives_stay_fixed(raw: str) -> None:
+    assert not hit(raw)
+
+
+@pytest.mark.parametrize("raw", REVIEWED["positive"])
+def test_reviewed_insults_still_found(raw: str) -> None:
+    assert hit(raw)
+
+
+@pytest.mark.parametrize(
+    ("word", "target", "ok"),
+    [
+        ("malayq", "malaya", True),  # q is next to a
+        ("mjigna", "mjinga", True),  # swapped neighbours
+        ("mjiinga", "mjinga", True),  # doubled letter
+        ("mabaya", "malaya", False),  # b is far from l: a different word
+        ("ndani", "nyani", False),
+        ("nani", "nyani", False),  # dropped consonant
+        ("wajiunga", "wajinga", False),  # inserted letter
+        ("mjinga", "mjinga", False),  # identical is a regex match, not a typo
+    ],
+)
+def test_typo_like(word: str, target: str, ok: bool) -> None:
+    assert typo_like(word, target, 1) is ok
+
+
+def test_keyboard_adjacent() -> None:
+    assert keyboard_adjacent("q", "a") and keyboard_adjacent("s", "w")
+    assert keyboard_adjacent("z", "x") and keyboard_adjacent("b", "h")
+    assert not keyboard_adjacent("b", "l") and not keyboard_adjacent("a", "a")

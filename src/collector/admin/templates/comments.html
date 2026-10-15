@@ -2,6 +2,7 @@
 {% set title = "Comments" %}
 {% block content %}
 <h1>Comments <span class="muted" style="font-weight: 400">{{ total }}</span></h1>
+{% if post %}<div class="flash ok">Showing comments on one post: {{ (post.caption or "(no caption)")|truncate(80) }} · <a href="/admin/comments?account={{ filters.account }}&show={{ filters.show }}&q={{ filters.q|urlencode }}">show all posts</a></div>{% endif %}
 
 <form class="panel row" method="get" action="/admin/comments">
   <label>Account
@@ -19,6 +20,7 @@
     </select>
   </label>
   <label>Text contains<input name="q" value="{{ filters.q }}" placeholder="search…"></label>
+  {% if filters.media %}<input type="hidden" name="media" value="{{ filters.media }}">{% endif %}
   <button class="primary">Filter</button>
   <a href="/admin/comments">Reset</a>
   <span style="margin-left: auto">
@@ -36,7 +38,7 @@
     <tr class="{{ 'hit' if f and f.match_score is not none and f.match_score >= hit_threshold and not f.exclude_reason else '' }}">
       <td style="white-space: nowrap">{{ c.commented_at|dt }}</td>
       <td>@{{ username }}{% if permalink and permalink.startswith("https://") %}<br><a href="{{ permalink }}" target="_blank" rel="noopener noreferrer">post ↗</a>{% endif %}</td>
-      <td class="text">{{ c.text_raw }}</td>
+      <td class="text">{% for piece, is_hit in marked[c.id] %}{% if is_hit %}<mark title="hit word">{{ piece }}</mark>{% else %}{{ piece }}{% endif %}{% endfor %}</td>
       <td class="text muted">{{ f.text_norm if f else "" }}</td>
       <td>{{ f.lang if f and f.lang else "—" }}</td>
       <td>{% if f %}{% for r in f.matched_roots %}<span class="chip">{{ r }}</span>{% endfor %}{% endif %}</td>
@@ -58,5 +60,5 @@
   </div>
   {% else %}<p class="muted">No comments match.</p>{% endif %}
 </div>
-<p class="muted">Highlighted rows are lexicon hits eligible for sampling. Commenter identities are never stored.</p>
+<p class="muted">Highlighted rows are lexicon hits eligible for sampling; <mark>marked</mark> words are what made them hits. Commenter identities are never stored.</p>
 {% endblock %}

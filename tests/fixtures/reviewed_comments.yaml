@@ -1,0 +1,33 @@
+# Phrases from real scraped comments, reviewed by the project owner on 2026-10-15.
+# Trimmed to the relevant words; @mentions and names removed.
+# negative: the matcher wrongly flagged these (all via unrestricted fuzzy matching).
+# positive: true insults, including the ones only fuzzy/typo matching can catch.
+# Every entry must stay correct: add new reviewed mistakes here before fixing them.
+
+negative:
+  - Urithi wake utaendelea kuishi ndani ya mioyo yetu
+  - we nani
+  - maneno mabaya kwa wapinzani
+  - mbio za Mwenge wa Uhuru
+  - TUNAKODISHA MATURUBAI na msonge
+  - wakijitahidi wasonge mbele
+  - Barabara ni KERO kwa wananchi wa Mkinga
+  - mayai ya hao bata mzinga
+  - vyeti vya kuunga unga na majina ya feki
+  - Sahihi kiongozi waje wajiunga na sisi
+  - hotel dodoma mkungu niokoteahe ya maji
+  - Una ulevi wa kipya kinyemi
+
+positive:
+  - kaa kwakutulia wewe malayq
+  - tena bonge la tapeli kumamake
+  - MATAKO TU wewe huna lolote
+  - Nyie wajinga mmekosa ya kuongea
+  - we msenge nini
+  - shoga wewe
+  - mkundu wako
+  - Acha upumbavu
+  - huyu ni mpumbavu sana
+  - mataako yako
+  - kapanda bus lenye Kinyesi
+  - wewe na nan kahaba wa kiume

@@ -8,7 +8,12 @@ from sqlalchemy.orm import Session
 from collector.ig.backfill import upsert_comment
 from collector.models import Account, CommentFeatures, Media
 from collector.nlp.langid import HeuristicDetector, LangResult
-from collector.pipeline.process import exclude_reason, pipeline_version, process
+from collector.pipeline.process import (
+    PIPELINE_VERSION,
+    exclude_reason,
+    pipeline_version,
+    process,
+)
 from collector.security import encrypt_token
 
 DETECTOR = HeuristicDetector()
@@ -136,7 +141,7 @@ def test_version_bump_reprocesses(db: Session, media: Media) -> None:
 
     assert stats.processed == 2
     after = features(db)
-    assert {f.pipeline_version for f in after.values()} == {"1+other-backend"}
+    assert {f.pipeline_version for f in after.values()} == {f"{PIPELINE_VERSION}+other-backend"}
     assert all(after[t].processed_at >= before[t] for t in before)
 
 

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from collector.ig.client import GraphClient
 from collector.models import Account, Comment, Media, SyncState
 from collector.security import hash_author
+from collector.storage_filter import should_store
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class BackfillStats:
     media_skipped: int = 0
     comments_seen: int = 0
     comments_inserted: int = 0
+    comments_dropped: int = 0  # not a hit, with STORE_ONLY_HITS
 
 
 def parse_ts(value: str | None) -> datetime | None:
@@ -228,6 +230,9 @@ class Backfill:
 
     def _store(self, media_id: int, item: dict[str, Any], parent_id: str | None = None) -> None:
         self.stats.comments_seen += 1
+        if not should_store(item.get("text") or ""):
+            self.stats.comments_dropped += 1
+            return
         if upsert_comment(self.session, media_id, item, "backfill", parent_id):
             self.stats.comments_inserted += 1
 

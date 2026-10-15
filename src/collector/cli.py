@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import httpx
 import typer
@@ -17,6 +17,9 @@ from collector.logs import configure_logging
 from collector.models import Account
 from collector.security import decrypt_token
 
+if TYPE_CHECKING:
+    from collector.scrape.run import ScrapeOptions
+
 app = typer.Typer(help="Swahili abusive-comment dataset collector", no_args_is_help=True)
 accounts_app = typer.Typer(help="Connected Instagram accounts", no_args_is_help=True)
 tokens_app = typer.Typer(help="Access token maintenance", no_args_is_help=True)
@@ -26,6 +29,11 @@ webhooks_app = typer.Typer(help="Webhook subscriptions", no_args_is_help=True)
 app.add_typer(webhooks_app, name="webhooks")
 demo_app = typer.Typer(help="Synthetic demo data (no Meta app needed)", no_args_is_help=True)
 app.add_typer(demo_app, name="demo")
+scrape_app = typer.Typer(
+    help="Scrape public Instagram/Facebook comments with a logged-in browser",
+    no_args_is_help=True,
+)
+app.add_typer(scrape_app, name="scrape")
 
 
 @accounts_app.command("list")
@@ -60,13 +68,17 @@ def backfill(
         if acct is None or not acct.active:
             typer.echo(f"No active account with id {account}.", err=True)
             raise typer.Exit(1)
+        if acct.ig_user_id.startswith("scrape:"):
+            typer.echo(f"{acct.username} is a scraped source; use `collector scrape`.", err=True)
+            raise typer.Exit(1)
         client = GraphClient(
             decrypt_token(acct.access_token_enc), http=http, version=settings.graph_api_version
         )
         stats = backfill_account(session, client, acct, since.date() if since else None)
     typer.echo(
         f"media: {stats.media_seen} seen, {stats.media_skipped} skipped (resumed) | "
-        f"comments: {stats.comments_seen} seen, {stats.comments_inserted} new"
+        f"comments: {stats.comments_seen} seen, {stats.comments_inserted} new, "
+        f"{stats.comments_dropped} dropped (no abusive word)"
     )
 
 
@@ -271,8 +283,8 @@ def webhooks_subscribe(
     settings = get_settings()
     with session_scope() as session, httpx.Client(timeout=30) as http:
         acct = session.get(Account, account)
-        if acct is None:
-            typer.echo(f"No account with id {account}.", err=True)
+        if acct is None or acct.ig_user_id.startswith("scrape:"):
+            typer.echo(f"No connected account with id {account}.", err=True)
             raise typer.Exit(1)
         try:
             oauth.subscribe_webhooks(http, settings, decrypt_token(acct.access_token_enc))
@@ -280,6 +292,115 @@ def webhooks_subscribe(
             typer.echo(f"Failed: {e}", err=True)
             raise typer.Exit(1) from e
     typer.echo(f"@{acct.username}: subscribed to {', '.join(oauth.WEBHOOK_FIELDS)}")
+
+
+Targets = Annotated[list[str], typer.Argument(help="Profiles, pages, #hashtags or post URLs")]
+MaxPosts = Annotated[int, typer.Option(help="Posts per target")]
+MaxComments = Annotated[int, typer.Option(help="Comments per post")]
+Category = Annotated[str | None, typer.Option(help="Category stored with these sources")]
+Delay = Annotated[float, typer.Option(help="Average seconds between requests")]
+Refresh = Annotated[bool, typer.Option(help="Rescrape posts already scraped")]
+
+
+@scrape_app.command("login")
+def scrape_login(
+    platform: Annotated[str, typer.Argument(help="instagram or facebook")],
+) -> None:
+    """Open a browser window to log in by hand. The session is kept for later scrapes."""
+    from collector.scrape.run import LOGIN_TIMEOUT, wait_for_login
+
+    if platform not in ("instagram", "facebook"):
+        typer.echo("platform must be instagram or facebook", err=True)
+        raise typer.Exit(1)
+    typer.echo(
+        f"Log in in the browser window. It closes by itself once you are in "
+        f"(or after {LOGIN_TIMEOUT / 60:.0f} minutes)."
+    )
+    with session_scope() as session:
+        ok = wait_for_login(session, platform)
+    typer.echo(f"{platform}: {'logged in, session saved' if ok else 'NOT logged in'}")
+    if not ok:
+        raise typer.Exit(1)
+
+
+def _run_scrape(platform: str, targets: list[str], options: "ScrapeOptions") -> None:
+    from collector.scrape.common import ScrapeError
+    from collector.scrape.run import run_scrape
+
+    configure_logging(logging.INFO)
+    try:
+        with session_scope() as session:
+            run = run_scrape(session, platform, targets, options)
+    except ScrapeError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from e
+    for result in run.results:
+        typer.echo(str(result), err=result.stats is None)
+    if run.blocked:
+        typer.echo(f"Stopped: {run.blocked}. Everything scraped so far is saved.", err=True)
+        raise typer.Exit(2)
+    typer.echo("next: collector process && collector stats")
+    if run.failed:
+        raise typer.Exit(1)
+
+
+@scrape_app.command("instagram")
+def scrape_instagram(
+    targets: Targets,
+    max_posts: MaxPosts = 20,
+    max_comments: MaxComments = 5000,
+    since: Annotated[
+        datetime | None, typer.Option(formats=["%Y-%m-%d"], help="Only posts on/after")
+    ] = None,
+    category: Category = None,
+    delay: Delay = 4.0,
+    refresh: Refresh = False,
+) -> None:
+    """Scrape comments from @users, #hashtags or post URLs."""
+    from collector.scrape.run import ScrapeOptions
+
+    options = ScrapeOptions(
+        max_posts=max_posts,
+        max_comments=max_comments,
+        since=since.date() if since else None,
+        category=category,
+        delay=delay,
+        refresh=refresh,
+    )
+    _run_scrape("instagram", targets, options)
+
+
+@scrape_app.command("facebook")
+def scrape_facebook(
+    targets: Targets,
+    max_posts: MaxPosts = 20,
+    max_comments: MaxComments = 5000,
+    category: Category = None,
+    delay: Delay = 4.0,
+    refresh: Refresh = False,
+) -> None:
+    """Scrape comments from page / group URLs (recent posts) or post URLs."""
+    from collector.scrape.run import ScrapeOptions
+
+    options = ScrapeOptions(
+        max_posts=max_posts,
+        max_comments=max_comments,
+        category=category,
+        delay=delay,
+        refresh=refresh,
+    )
+    _run_scrape("facebook", targets, options)
+
+
+@app.command()
+def ui(
+    port: Annotated[int, typer.Option(help="Port to listen on")] = 8001,
+) -> None:
+    """Run the admin dashboard on this computer (needed for scraping from the UI)."""
+    import uvicorn
+
+    typer.echo(f"Dashboard: http://127.0.0.1:{port}/admin  (Ctrl+C to stop)")
+    uvicorn.run("collector.api:app", host="127.0.0.1", port=port)
 
 
 @tokens_app.command("refresh")

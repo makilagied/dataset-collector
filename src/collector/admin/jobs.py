@@ -6,6 +6,7 @@ process stopped are marked `interrupted` on startup.
 """
 
 import logging
+import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
@@ -28,6 +29,7 @@ from collector.security import decrypt_token
 log = logging.getLogger(__name__)
 
 ACTIVE = ("queued", "running")
+_current = threading.local()  # the job the worker thread is running, for report()
 
 
 class JobError(Exception):
@@ -40,6 +42,8 @@ def _account(session: Session, params: dict[str, Any]) -> Account:
         raise JobError(f"account {params['account_id']} not found")
     if account.ig_user_id.startswith("demo-"):
         raise JobError("demo account has no real token; use `collector demo load`")
+    if account.ig_user_id.startswith("scrape:"):
+        raise JobError(f"{account.username} is a scraped source; rerun `collector scrape`")
     return account
 
 
@@ -56,7 +60,7 @@ def _backfill(session: Session, params: dict[str, Any]) -> str:
         stats = backfill_account(session, client, account, since)
     return (
         f"@{account.username}: {stats.media_seen} posts, {stats.comments_seen} comments seen, "
-        f"{stats.comments_inserted} new"
+        f"{stats.comments_inserted} new, {stats.comments_dropped} dropped (no abusive word)"
     )
 
 
@@ -80,6 +84,58 @@ def _refresh_tokens(session: Session, params: dict[str, Any]) -> str:
     return f"{ok} token(s) refreshed"
 
 
+def report(session: Session, text: str) -> None:
+    """Show progress on the running job (the Jobs page displays it until the job ends)."""
+    job_id = getattr(_current, "job_id", None)
+    if job_id is not None:
+        session.execute(update(Job).where(Job.id == job_id).values(result=redact(text)[:2000]))
+        session.commit()
+
+
+def _scrape_login(session: Session, params: dict[str, Any]) -> str:
+    from collector.scrape.run import wait_for_login
+
+    platform = params["platform"]
+    report(session, "waiting for you to log in in the browser window on this computer…")
+    if not wait_for_login(session, platform):
+        raise JobError(f"{platform}: not logged in (window closed or timed out)")
+    return f"{platform}: logged in, session saved"
+
+
+def _scrape(session: Session, params: dict[str, Any]) -> str:
+    from collector.scrape.common import ScrapeError
+    from collector.scrape.run import ScrapeOptions, run_scrape
+
+    options = ScrapeOptions(
+        max_posts=int(params.get("max_posts", 20)),
+        max_comments=int(params.get("max_comments", 5000)),
+        since=date.fromisoformat(params["since"]) if params.get("since") else None,
+        category=params.get("category") or None,
+        delay=float(params.get("delay", 4.0)),
+        refresh=bool(params.get("refresh")),
+    )
+    latest: dict[str, str] = {}  # one progress line per source, in scrape order
+
+    def progress(text: str) -> None:
+        latest[text.split(": ", 1)[0]] = text
+        report(session, "\n".join(latest.values()))
+
+    try:
+        run = run_scrape(session, params["platform"], list(params["targets"]), options, progress)
+    except ScrapeError as e:
+        raise JobError(str(e)) from e
+    lines = [str(r) for r in run.results]
+    if params.get("process"):
+        stats = process(session)
+        lines.append(f"processed {stats.processed} new comments, {stats.hits} hits")
+    if run.blocked:
+        lines.append(f"Stopped: {run.blocked}. Everything scraped so far is saved.")
+    text = "\n".join(lines)
+    if run.blocked or (run.results and run.failed == len(run.results)):
+        raise JobError(text)
+    return text
+
+
 def _subscribe(session: Session, params: dict[str, Any]) -> str:
     account = _account(session, params)
     with httpx.Client(timeout=30) as http:
@@ -92,6 +148,8 @@ HANDLERS: dict[str, Callable[[Session, dict[str, Any]], str]] = {
     "process": _process,
     "refresh_tokens": _refresh_tokens,
     "subscribe_webhooks": _subscribe,
+    "scrape_login": _scrape_login,
+    "scrape": _scrape,
 }
 
 
@@ -102,6 +160,7 @@ def run_job(factory: sessionmaker[Session], job_id: int) -> None:
             return
         job.status, job.started_at = "running", datetime.now(UTC)
         session.commit()
+        _current.job_id = job_id
         try:
             job.result = HANDLERS[job.kind](session, dict(job.params or {}))
             job.status = "done"
@@ -113,6 +172,8 @@ def run_job(factory: sessionmaker[Session], job_id: int) -> None:
                 log.exception("job %s (%s) failed", job_id, job.kind)
             message = str(e) if isinstance(e, JobError) else f"{type(e).__name__}: {e}"
             job.status, job.error = "failed", redact(message)[:2000]
+        finally:
+            _current.job_id = None
         job.finished_at = datetime.now(UTC)
         session.commit()
 

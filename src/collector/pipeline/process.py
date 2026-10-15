@@ -18,10 +18,10 @@ from collector.models import Comment, CommentFeatures
 from collector.nlp import langid
 from collector.nlp.lexicon import Lexicon, load_lexicon
 from collector.nlp.matcher import match
-from collector.nlp.normalize import is_protected, normalize
+from collector.nlp.normalize import is_protected, normalize, normalize_plain
 
 # Bump when normalizer, lexicon or matcher behaviour changes to reprocess everything.
-PIPELINE_VERSION = "1"
+PIPELINE_VERSION = "3"  # 2: English lexicon, 3: typo-like fuzzy only
 _ALNUM = re.compile(r"[^\W_]")
 
 
@@ -116,7 +116,7 @@ def process(
                 if norm in seen_in_batch or earlier.get(norm, cid) < cid:
                     reason = "duplicate"
                 seen_in_batch.add(norm)
-            result = match(norm, lex)
+            result = match(norm, lex, normalize_plain(raw or ""))
             lang = det.detect(raw or "")
             rows.append(
                 {

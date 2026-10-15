@@ -26,7 +26,9 @@ class Account(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     ig_user_id: Mapped[str] = mapped_column(String, unique=True)
-    username: Mapped[str | None] = mapped_column(String)  # account owner, who consented
+    # Account owner, who consented; for scraped sources (ig_user_id 'scrape:...') the
+    # profile, page or #hashtag scraped.
+    username: Mapped[str | None] = mapped_column(String)
     consent_ref: Mapped[str | None] = mapped_column(String)
     category: Mapped[str | None] = mapped_column(String)  # e.g. udaku, football, media, music
     access_token_enc: Mapped[str] = mapped_column(Text)
@@ -67,7 +69,7 @@ class Comment(Base):
     like_count: Mapped[int | None] = mapped_column(Integer)
     hidden: Mapped[bool | None] = mapped_column(Boolean)
     commented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    source: Mapped[str] = mapped_column(String)  # 'backfill' | 'webhook'
+    source: Mapped[str] = mapped_column(String)  # 'backfill' | 'webhook' | 'scrape'
     raw_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     ingested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

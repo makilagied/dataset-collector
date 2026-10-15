@@ -21,30 +21,36 @@
   <div class="row" style="justify-content: space-between; align-items: center">
     <h2 style="margin: 0">@{{ a.username or "?" }}
       {% if r.demo %}<span class="chip">demo</span>{% endif %}
+      {% if r.scraped %}<span class="chip">scraped</span>{% endif %}
       {% if not a.active %}<span class="chip">paused</span>{% endif %}
       <span class="muted" style="font-weight: 400">#{{ a.id }}</span></h2>
-    <a href="/admin/comments?account={{ a.id }}">View comments →</a>
+    <span><a href="/admin/posts?account={{ a.id }}">View posts →</a> · <a href="/admin/comments?account={{ a.id }}">View comments →</a></span>
   </div>
 
   <div class="cards" style="margin: 12px 0">
     <div class="card"><div class="l">Posts</div><div class="n">{{ s.media if s else 0 }}</div></div>
-    <div class="card"><div class="l">Comments</div><div class="n">{{ s.comments if s else 0 }}</div></div>
+    <div class="card"><div class="l">Comments collected</div><div class="n">{{ s.comments if s else 0 }}</div></div>
     <div class="card"><div class="l">Hits</div><div class="n">{{ s.hits if s else 0 }}</div></div>
     <div class="card"><div class="l">Hit rate</div><div class="n">{{ "%.1f"|format((s.hit_rate if s else 0) * 100) }}%</div></div>
   </div>
 
+  {% if r.scraped %}
+  <p class="muted">Scraped source, added {{ a.connected_at|dt }} · last scraped {{ r.last_sync|dt }} ·
+    scrape it again from the <a href="/admin/scrape">Scrape</a> page</p>
+  {% else %}
   <p class="muted">
     Connected {{ a.connected_at|dt }} · last backfill {{ r.last_sync|dt }} ·
     token expires {{ a.token_expires_at|dt }}
     {% if a.token_expires_at and (a.token_expires_at - now).days < 10 %}<strong class="status-failed">(soon: refresh tokens)</strong>{% endif %}
     · consent ref {{ a.consent_ref or "—" }}
   </p>
+  {% endif %}
 
   <div class="row">
     <form class="inline" method="post" action="/admin/accounts/{{ a.id }}/backfill">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/accounts">
       <label>Since (optional)<input type="date" name="since"></label>
-      <button class="primary" {% if r.demo or not a.active %}disabled{% endif %}>Backfill</button>
+      <button class="primary" {% if r.demo or r.scraped or not a.active %}disabled{% endif %}>Backfill</button>
     </form>
     <form class="inline" method="post" action="/admin/accounts/{{ a.id }}/category">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/accounts">
@@ -53,7 +59,7 @@
     </form>
     <form class="inline" method="post" action="/admin/accounts/{{ a.id }}/subscribe">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/accounts">
-      <button {% if r.demo %}disabled{% endif %}>Re-subscribe webhooks</button>
+      <button {% if r.demo or r.scraped %}disabled{% endif %}>Re-subscribe webhooks</button>
     </form>
     <form class="inline" method="post" action="/admin/accounts/{{ a.id }}/active">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/accounts">

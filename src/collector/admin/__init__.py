@@ -1,4 +1,4 @@
-"""Admin UI: accounts, comments, batches and background jobs, at /admin.
+"""Admin UI: accounts, scraping, comments, batches and background jobs, at /admin.
 
 Security:
 - Login page with a signed session cookie (HttpOnly, SameSite=Lax, 12 h). Credentials are
@@ -32,6 +32,7 @@ from collector.admin import jobs
 from collector.config import Settings, get_settings
 from collector.db import get_sessionmaker
 from collector.models import Account, Comment, CommentFeatures, Job, Media
+from collector.nlp.highlight import segments
 from collector.pipeline.export import (
     FORMATS,
     SHOW_FILTERS,
@@ -289,6 +290,7 @@ def accounts(
             "stats": counts.get(a.id),
             "last_sync": last_sync.get(a.id),
             "demo": a.ig_user_id.startswith("demo-"),
+            "scraped": a.ig_user_id.startswith("scrape:"),
         }
         for a in db.scalars(select(Account).order_by(Account.id))
     ]
@@ -358,6 +360,188 @@ def account_active(account_id: int, db: Db, form: Form) -> Response:
     return back(form, f"@{account.username} {state}")
 
 
+# --- scraping ------------------------------------------------------------------------
+
+MAX_TARGETS = 50
+SCRAPE_LIMITS = {"max_posts": (1, 500), "max_comments": (1, 100_000), "delay": (1, 60)}
+
+
+def _split(text: str) -> list[str]:
+    return list(dict.fromkeys(t for t in re.split(r"[\s,]+", text) if t))
+
+
+@router.get("/scrape", response_class=HTMLResponse)
+def scrape_page(request: Request, db: Db, settings: SettingsDep) -> HTMLResponse:
+    from collector.scrape.run import login_status, unavailable_reason
+
+    counts = {a.account_id: a for a in collect_stats(db).accounts}
+    sources = [
+        {"account": a, "stats": counts.get(a.id), "platform": a.ig_user_id.split(":")[1]}
+        for a in db.scalars(
+            select(Account).where(Account.ig_user_id.startswith("scrape:")).order_by(Account.id)
+        )
+    ]
+    recent = db.scalars(
+        select(Job).where(Job.kind.in_(["scrape", "scrape_login"])).order_by(Job.id.desc()).limit(8)
+    ).all()
+    return render(
+        request,
+        "scrape.html",
+        settings,
+        unavailable=unavailable_reason(),
+        logins=login_status(db),
+        sources=sources,
+        recent_jobs=recent,
+        active=any(j.status in jobs.ACTIVE for j in recent),
+    )
+
+
+@router.post("/scrape/login")
+def scrape_login(db: Db, factory: Factory, form: Form) -> Response:
+    from collector.scrape.run import unavailable_reason
+
+    platform = form.get("platform", "")
+    if platform not in ("instagram", "facebook"):
+        return back(form, "Unknown platform", "error", "/admin/scrape")
+    if reason := unavailable_reason():
+        return back(form, f"Can't open a browser here: {reason}", "error", "/admin/scrape")
+    job, created = jobs.enqueue(db, factory, "scrape_login", {"platform": platform})
+    if not created:
+        return back(form, f"Login is already {job.status} (job #{job.id}).", "warn")
+    return back(
+        form,
+        f"A browser window will open on this computer (job #{job.id}): log in to "
+        f"{platform.title()} there. It closes by itself once you're in.",
+    )
+
+
+@router.post("/scrape")
+def scrape_start(db: Db, factory: Factory, form: Form) -> Response:
+    from collector.scrape import facebook, instagram
+    from collector.scrape.common import ScrapeError
+    from collector.scrape.run import unavailable_reason
+
+    def error(msg: str) -> Response:
+        return back(form, msg, "error", "/admin/scrape")
+
+    platform = form.get("platform", "")
+    if platform not in ("instagram", "facebook"):
+        return error("Unknown platform")
+    if reason := unavailable_reason():
+        return error(f"Can't open a browser here: {reason}")
+    targets = _split(form.get("targets", ""))
+    if not targets:
+        return error("Add at least one target")
+    if len(targets) > MAX_TARGETS:
+        return error(f"At most {MAX_TARGETS} targets per run")
+    parse = instagram.parse_target if platform == "instagram" else facebook.parse_target
+    bad = []
+    for t in targets:
+        try:
+            parse(t)
+        except ScrapeError:
+            bad.append(t)
+    if bad:
+        return error(f"Not a valid {platform.title()} target: {', '.join(bad)}")
+
+    params: dict[str, Any] = {"platform": platform, "targets": targets}
+    try:
+        for name, (lo, hi) in SCRAPE_LIMITS.items():
+            value = float(form.get(name) or 0)
+            if not lo <= value <= hi:
+                return error(f"{name.replace('_', ' ')} must be between {lo} and {hi}")
+            params[name] = value if name == "delay" else int(value)
+    except ValueError:
+        return error("Numbers only in the limits")
+    since = form.get("since", "").strip()
+    if since and platform == "instagram":
+        try:
+            datetime.strptime(since, "%Y-%m-%d")
+        except ValueError:
+            return error("Since must be a date like 2026-01-31")
+        params["since"] = since
+    category = form.get("category", "").strip().lower()[:40]
+    if category:
+        params["category"] = category
+    for flag in ("refresh", "process"):
+        if form.get(flag) == "1":
+            params[flag] = True
+    label = f"{platform.title()} scrape of {len(targets)} target(s)"
+    return _queue(db, factory, form, "scrape", params, label)
+
+
+# --- posts ---------------------------------------------------------------------------
+
+
+@router.get("/posts", response_class=HTMLResponse)
+def posts(
+    request: Request,
+    db: Db,
+    settings: SettingsDep,
+    account: Annotated[int | None, Query()] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+) -> HTMLResponse:
+    """Posts with Instagram's reported comment count next to what was actually collected."""
+    eligible_hit = (CommentFeatures.match_score >= HIT_THRESHOLD) & (
+        CommentFeatures.exclude_reason.is_(None)
+    )
+    query = (
+        select(
+            Media,
+            Account.username,
+            func.count(Comment.id).label("collected"),
+            func.count(CommentFeatures.comment_id).filter(eligible_hit).label("hits"),
+            func.count(Comment.id)
+            .filter(CommentFeatures.comment_id.is_(None))
+            .label("unprocessed"),
+        )
+        .join(Account, Account.id == Media.account_id)
+        .outerjoin(Comment, Comment.media_id == Media.id)
+        .outerjoin(CommentFeatures, CommentFeatures.comment_id == Comment.id)
+        .group_by(Media.id, Account.username)
+    )
+    per_post = (
+        select(Media.comments_count, func.count(Comment.id).label("n"))
+        .outerjoin(Comment, Comment.media_id == Media.id)
+        .group_by(Media.id)
+    )
+    if account:
+        query = query.where(Media.account_id == account)
+        per_post = per_post.where(Media.account_id == account)
+    pp = per_post.subquery()
+    reported_col = func.coalesce(pp.c.comments_count, 0)
+    n_posts, reported, collected, missing = db.execute(
+        select(
+            func.count(),
+            func.coalesce(func.sum(reported_col), 0),
+            func.coalesce(func.sum(pp.c.n), 0),
+            # per post, so extra replies on one post can't hide a gap on another
+            func.coalesce(func.sum(func.greatest(reported_col - pp.c.n, 0)), 0),
+        )
+    ).one()
+    rows = db.execute(
+        query.order_by(Media.posted_at.desc().nulls_last(), Media.id.desc())
+        .offset((page - 1) * PAGE_SIZE)
+        .limit(PAGE_SIZE)
+    ).all()
+    accounts_list = db.scalars(select(Account).order_by(Account.username)).all()
+    return render(
+        request,
+        "posts.html",
+        settings,
+        rows=rows,
+        n_posts=n_posts,
+        reported=reported,
+        collected=collected,
+        missing=missing,
+        page=page,
+        pages=max(1, -(-n_posts // PAGE_SIZE)),
+        accounts=accounts_list,
+        account=account or "",
+        page_url=lambda p: "/admin/posts?" + urlencode({"account": account or "", "page": p}),
+    )
+
+
 # --- comments ------------------------------------------------------------------------
 
 
@@ -369,6 +553,7 @@ def comments(
     account: Annotated[int | None, Query()] = None,
     show: str = "all",
     q: str = "",
+    media: Annotated[int | None, Query()] = None,
     page: Annotated[int, Query(ge=1)] = 1,
 ) -> HTMLResponse:
     if show not in SHOW_FILTERS:
@@ -381,6 +566,7 @@ def comments(
         account,
         show,
         q,
+        media,
     )
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     rows = db.execute(
@@ -389,12 +575,14 @@ def comments(
         .limit(PAGE_SIZE)
     ).all()
     accounts_list = db.scalars(select(Account).order_by(Account.username)).all()
-    filters = {"account": account or "", "show": show, "q": q}
+    filters = {"account": account or "", "show": show, "q": q, "media": media or ""}
     return render(
         request,
         "comments.html",
         settings,
+        post=db.get(Media, media) if media else None,
         rows=rows,
+        marked={c.id: segments(c.text_raw or "") for c, *_ in rows},
         total=total,
         page=page,
         pages=max(1, -(-total // PAGE_SIZE)),
@@ -413,6 +601,7 @@ def export_comments(
     account: Annotated[int | None, Query()] = None,
     show: str = "all",
     q: str = "",
+    media: Annotated[int | None, Query()] = None,
 ) -> Response:
     """Download every comment matching the filters (abusive or not), anonymized."""
     if fmt not in FORMATS or show not in SHOW_FILTERS:
@@ -421,15 +610,17 @@ def export_comments(
     def stream() -> Iterator[bytes]:
         # Own session: the request's dependency session is closed before streaming starts.
         with factory() as session:
-            for piece in iter_all_comments(session, fmt, account_id=account, show=show, q=q):
+            for piece in iter_all_comments(
+                session, fmt, account_id=account, show=show, q=q, media_id=media
+            ):
                 yield piece.encode("utf-8")
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M")
     name = f"comments-{show}-{stamp}.{fmt}"
-    media = "text/csv" if fmt == "csv" else "application/x-ndjson"
+    mime = "text/csv" if fmt == "csv" else "application/x-ndjson"
     return StreamingResponse(
         stream(),
-        media_type=f"{media}; charset=utf-8",
+        media_type=f"{mime}; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )
 

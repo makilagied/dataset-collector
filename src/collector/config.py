@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     admin_user: str = "admin"
     admin_password: str | None = None
     admin_allow_remote: bool = False
+    # Store only comments with a Swahili/English abusive word (a lexicon hit), from every
+    # source: API backfill, webhooks and scraping. Others are read and dropped.
+    store_only_hits: bool = True
+    # Browser profile holding the logged-in Instagram/Facebook sessions used by `scrape`.
+    scrape_profile_dir: str = ".scrape-profile"
 
 
 @lru_cache

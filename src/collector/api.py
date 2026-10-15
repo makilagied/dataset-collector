@@ -136,9 +136,10 @@ def _ingest_in_background(factory: sessionmaker[Session], payload: dict[str, Any
             log.exception("webhook ingestion failed")
             return
     log.info(
-        "webhook: %d new, %d duplicate, %d skipped %s",
+        "webhook: %d new, %d duplicate, %d dropped (no hit), %d skipped %s",
         stats.inserted,
         stats.duplicates,
+        stats.dropped,
         stats.skipped,
         stats.reasons or "",
     )

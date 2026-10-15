@@ -20,6 +20,7 @@ from sqlalchemy import Select, func, select, update
 from sqlalchemy.orm import Session
 
 from collector.models import Account, Comment, CommentFeatures, Media, Sample
+from collector.nlp.highlight import hit_words
 from collector.pipeline.sample import HIT_THRESHOLD
 
 SHOW_FILTERS = ("all", "hits", "matched", "excluded", "unprocessed")
@@ -33,6 +34,7 @@ ALL_COLUMNS = (
     "lang",
     "lang_conf",
     "matched_roots",
+    "hit_words",
     "match_score",
     "is_hit",
     "exclude_reason",
@@ -48,6 +50,7 @@ COLUMNS = (
     "text_raw",
     "text_norm",
     "matched_roots",
+    "hit_words",
     "stratum",
     "account_category",
     "commented_at",
@@ -65,6 +68,11 @@ _FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
 
 class ExportError(ValueError):
     pass
+
+
+def _hit_words(text: str | None) -> list[str]:
+    """The words that made the comment a hit, as written ("M.J.I.N.G.A"), masked."""
+    return [mask(w) for w in hit_words(text or "")]
 
 
 def mask(text: str) -> str:
@@ -115,6 +123,7 @@ def render_batch(session: Session, batch: str, fmt: str) -> tuple[str, int]:
             "text_raw": mask(r.text_raw or ""),
             "text_norm": mask(r.text_norm or ""),
             "matched_roots": list(r.matched_roots or []),
+            "hit_words": _hit_words(r.text_raw),
             "stratum": r.stratum,
             "account_category": r.category or "",
             "commented_at": r.commented_at.isoformat() if r.commented_at else "",
@@ -130,7 +139,11 @@ def render_batch(session: Session, batch: str, fmt: str) -> tuple[str, int]:
         writer = csv.DictWriter(buf, fieldnames=COLUMNS)
         writer.writeheader()
         for rec in records:
-            flat = {**rec, "matched_roots": ";".join(rec["matched_roots"])}
+            flat = {
+                **rec,
+                "matched_roots": ";".join(rec["matched_roots"]),
+                "hit_words": ";".join(rec["hit_words"]),
+            }
             writer.writerow({k: _csv_safe(v) for k, v in flat.items()})
     else:
         for rec in records:
@@ -160,7 +173,11 @@ def export_batch(session: Session, batch: str, fmt: str, out: Path) -> ExportRes
 
 
 def filter_comments[*Ts](
-    query: Select[*Ts], account_id: int | None = None, show: str = "all", q: str = ""
+    query: Select[*Ts],
+    account_id: int | None = None,
+    show: str = "all",
+    q: str = "",
+    media_id: int | None = None,
 ) -> Select[*Ts]:
     """Filters shared by the admin Comments page and the all-comments export. The query
     must already join Comment, Media, Account and (outer) CommentFeatures."""
@@ -168,6 +185,8 @@ def filter_comments[*Ts](
         raise ExportError(f"show must be one of {SHOW_FILTERS}")
     if account_id:
         query = query.where(Account.id == account_id)
+    if media_id:
+        query = query.where(Media.id == media_id)
     if q.strip():
         query = query.where(Comment.text_raw.ilike(f"%{q.strip()}%"))
     if show == "hits":
@@ -183,7 +202,9 @@ def filter_comments[*Ts](
     return query
 
 
-def _all_comments_query(account_id: int | None, show: str, q: str) -> Select[*tuple[Any, ...]]:
+def _all_comments_query(
+    account_id: int | None, show: str, q: str, media_id: int | None = None
+) -> Select[*tuple[Any, ...]]:
     query = (
         select(
             Comment.id,
@@ -204,7 +225,7 @@ def _all_comments_query(account_id: int | None, show: str, q: str) -> Select[*tu
         .join(Account, Account.id == Media.account_id)
         .outerjoin(CommentFeatures, CommentFeatures.comment_id == Comment.id)
     )
-    return filter_comments(query, account_id, show, q).order_by(Comment.id)
+    return filter_comments(query, account_id, show, q, media_id).order_by(Comment.id)
 
 
 def _record(r: Any) -> dict[str, Any]:
@@ -219,6 +240,7 @@ def _record(r: Any) -> dict[str, Any]:
         "lang": r.lang or "",
         "lang_conf": r.lang_conf if r.lang_conf is not None else "",
         "matched_roots": list(r.matched_roots or []),
+        "hit_words": _hit_words(r.text_raw) if processed else [],
         "match_score": r.match_score if r.match_score is not None else "",
         "is_hit": (
             bool(
@@ -245,6 +267,7 @@ def iter_all_comments(
     account_id: int | None = None,
     show: str = "all",
     q: str = "",
+    media_id: int | None = None,
     chunk: int = 1000,
     counter: list[int] | None = None,
 ) -> Iterator[str]:
@@ -252,7 +275,7 @@ def iter_all_comments(
     `counter`, if given, receives the number of rows written."""
     if fmt not in FORMATS:
         raise ExportError(f"format must be one of {FORMATS}")
-    query = _all_comments_query(account_id, show, q).execution_options(yield_per=chunk)
+    query = _all_comments_query(account_id, show, q, media_id).execution_options(yield_per=chunk)
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=ALL_COLUMNS)
     if fmt == "csv":
@@ -263,7 +286,11 @@ def iter_all_comments(
             counter[0] = i
         rec = _record(row)
         if fmt == "csv":
-            flat = {**rec, "matched_roots": ";".join(rec["matched_roots"])}
+            flat = {
+                **rec,
+                "matched_roots": ";".join(rec["matched_roots"]),
+                "hit_words": ";".join(rec["hit_words"]),
+            }
             writer.writerow({k: _csv_safe(v) for k, v in flat.items()})
         else:
             buf.write(json.dumps(rec, ensure_ascii=False) + "\n")
