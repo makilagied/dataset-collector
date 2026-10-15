@@ -19,6 +19,7 @@
     --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 1px 3px rgba(16, 24, 40, .04);
     --shadow-lg: 0 8px 24px rgba(16, 24, 40, .08);
     --radius: 12px;
+    --bar: #3b5bdb; --track: #eef1f6;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -31,6 +32,7 @@
       --mark-bg: #e0b100; --mark-text: #0d1017;
       --side: #090c12; --side-text: #8e98ab; --side-hover: #161c28; --side-on: #ffffff;
       --shadow: 0 1px 2px rgba(0, 0, 0, .3); --shadow-lg: 0 8px 24px rgba(0, 0, 0, .35);
+      --bar: #5b7cf5; --track: #1c2230;
     }
   }
   * { box-sizing: border-box; }
@@ -234,6 +236,7 @@
           ("/admin/scrape", "Scrape", "scrape", None),
           ("/admin/posts", "Posts", "posts", "Data"),
           ("/admin/comments", "Comments", "comments", None),
+          ("/admin/words", "Hit words", "words", None),
           ("/admin/batches", "Batches", "batches", None),
           ("/admin/jobs", "Jobs", "jobs", "System")] %}
         {% if group %}<div class="group">{{ group }}</div>{% endif %}

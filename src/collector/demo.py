@@ -16,7 +16,16 @@ from sqlalchemy.orm import Session
 
 from collector.ig.backfill import BackfillStats, backfill_account
 from collector.ig.client import GraphClient
-from collector.models import Account, Comment, CommentFeatures, Media, Sample, SyncState
+from collector.models import (
+    Account,
+    Comment,
+    CommentDuplicate,
+    CommentFeatures,
+    Media,
+    Sample,
+    SyncState,
+)
+from collector.pipeline.hitwords import forget_comments
 from collector.security import encrypt_token
 
 DEMO_IG_USER_ID = "demo-0000000000"
@@ -175,6 +184,8 @@ def remove_demo(session: Session) -> int:
     comment_ids = select(Comment.id).where(Comment.media_id.in_(media_ids))
     removed = len(session.scalars(comment_ids).all())
     session.execute(delete(Sample).where(Sample.comment_id.in_(comment_ids)))
+    forget_comments(session, comment_ids)
+    session.execute(delete(CommentDuplicate).where(CommentDuplicate.comment_id.in_(comment_ids)))
     session.execute(delete(CommentFeatures).where(CommentFeatures.comment_id.in_(comment_ids)))
     session.execute(delete(Comment).where(Comment.media_id.in_(media_ids)))
     session.execute(delete(Media).where(Media.account_id == account.id))

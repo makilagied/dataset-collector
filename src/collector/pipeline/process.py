@@ -16,12 +16,17 @@ from sqlalchemy.orm import Session
 
 from collector.models import Comment, CommentFeatures
 from collector.nlp import langid
+from collector.nlp.highlight import hit_terms
 from collector.nlp.lexicon import Lexicon, load_lexicon
 from collector.nlp.matcher import match
 from collector.nlp.normalize import is_protected, normalize, normalize_plain
+from collector.pipeline.hitwords import CountDelta, apply_counts
 
 # Bump when normalizer, lexicon or matcher behaviour changes to reprocess everything.
-PIPELINE_VERSION = "3"  # 2: English lexicon, 3: typo-like fuzzy only
+# 2: English lexicon, 3: typo-like fuzzy only, 4: verbs + hit_words, 5: mamae, 6: hit_roots,
+# 7: words joined by "/" or "." kept apart, highlights split at punctuation, 8: occurrences,
+# 9: mninga allowlisted
+PIPELINE_VERSION = "9"
 _ALNUM = re.compile(r"[^\W_]")
 
 
@@ -86,7 +91,14 @@ def process(
 
     while True:
         query = (
-            select(Comment.id, Comment.text_raw)
+            select(
+                Comment.id,
+                Comment.text_raw,
+                Comment.occurrences,
+                CommentFeatures.hit_words,
+                CommentFeatures.hit_roots,
+                CommentFeatures.hit_weight,
+            )
             .outerjoin(CommentFeatures, CommentFeatures.comment_id == Comment.id)
             .where(Comment.id > last_id)
             .order_by(Comment.id)
@@ -104,13 +116,16 @@ def process(
             break
         last_id = batch[-1].id
 
-        normalized = [(cid, raw, normalize(raw or "")) for cid, raw in batch]
+        normalized = [(cid, raw, normalize(raw or "")) for cid, raw, *_ in batch]
         candidates = {norm for _, _, norm in normalized if norm and exclude_reason(norm) is None}
         earlier = _earlier_texts(session, candidates, [cid for cid, _, _ in normalized])
         seen_in_batch: set[str] = set()
 
         rows: list[dict[str, Any]] = []
-        for cid, raw, norm in normalized:
+        counts = CountDelta()
+        for (cid, raw, norm), (*_, weight, old_words, old_roots, old_weight) in zip(
+            normalized, batch, strict=True
+        ):
             reason = exclude_reason(norm)
             if reason is None:
                 if norm in seen_in_batch or earlier.get(norm, cid) < cid:
@@ -118,6 +133,8 @@ def process(
                 seen_in_batch.add(norm)
             result = match(norm, lex, normalize_plain(raw or ""))
             lang = det.detect(raw or "")
+            terms = hit_terms(raw or "", result)
+            counts.change(old_words, old_roots, terms, old_weight or 1, weight)
             rows.append(
                 {
                     "comment_id": cid,
@@ -128,6 +145,9 @@ def process(
                     "matched_roots": result.matched_roots,
                     "match_methods": result.match_methods,
                     "match_score": result.score,
+                    "hit_words": list(terms),
+                    "hit_roots": sorted(set(terms.values())),
+                    "hit_weight": weight,
                     "pipeline_version": version,
                 }
             )
@@ -141,6 +161,7 @@ def process(
         updates: dict[str, Any] = {k: stmt.excluded[k] for k in rows[0] if k != "comment_id"}
         updates["processed_at"] = func.now()
         session.execute(stmt.on_conflict_do_update(index_elements=["comment_id"], set_=updates))
+        apply_counts(session, counts)
         session.commit()
 
     return stats

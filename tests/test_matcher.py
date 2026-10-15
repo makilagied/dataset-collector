@@ -197,3 +197,59 @@ def test_keyboard_adjacent() -> None:
     assert keyboard_adjacent("q", "a") and keyboard_adjacent("s", "w")
     assert keyboard_adjacent("z", "x") and keyboard_adjacent("b", "h")
     assert not keyboard_adjacent("b", "l") and not keyboard_adjacent("a", "a")
+
+
+@pytest.mark.parametrize(
+    ("text", "root"),
+    [
+        ("tomba", "tomba"),
+        ("nitakutomba", "tomba"),
+        ("Tombwa", "tomba"),
+        ("t.o.m.b.a", "tomba"),
+        ("kufira", "fira"),
+        ("anafirwa", "fira"),
+        ("kufila", "fila"),
+        ("fila", "fila"),
+        ("wewe nakugonga", "gonga"),
+    ],
+)
+def test_verbs_take_any_prefix_and_verb_endings(text: str, root: str) -> None:
+    result = match(normalize(text))
+    assert result.is_hit and result.matched_roots == [root]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "gonga mlango",
+        "amegongwa na gari",
+        "magari yamegongana",
+        "the file",
+        "fire!",
+        "profile",
+        "tomb raider",
+        "sunna na nafila",
+        "filamu",
+    ],
+)
+def test_verbs_leave_innocent_words_alone(text: str) -> None:
+    assert not hit(text)
+
+
+def test_verb_root_must_be_dictionary_form() -> None:
+    with pytest.raises(lx.LexiconError, match="must end in 'a'"):
+        lx.parse_lexicon({"roots": [{"root": "tomb", "verb": True, "severity": "high"}]})
+    with pytest.raises(lx.LexiconError, match="any prefix"):
+        lx.parse_lexicon(
+            {"roots": [{"root": "tomba", "verb": True, "prefixes": ["ku"], "severity": "high"}]}
+        )
+
+
+@pytest.mark.parametrize("text", ["MAMAEE", "mamae", "Mamaeeee", "m.a.m.a.e", "mamaee wewe"])
+def test_mamae_is_a_hit(text: str) -> None:
+    assert hit(text)
+
+
+@pytest.mark.parametrize("text", ["mama", "mamake", "mama yako", "mamaye"])
+def test_plain_mother_words_are_not_mamae(text: str) -> None:
+    assert not hit(text)

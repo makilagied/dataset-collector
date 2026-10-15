@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from collector.ig.backfill import upsert_comment, upsert_media
 from collector.models import Account, Media
-from collector.storage_filter import should_store
+from collector.storage_filter import prepare
 
 SCRAPE_PREFIX = "scrape:"
 PLATFORMS = ("instagram", "facebook")
@@ -125,10 +125,11 @@ class Store:
 
     def comment(self, media: Media, item: dict[str, Any]) -> None:
         self.stats.comments_seen += 1
-        if not should_store(item.get("text") or ""):
+        stored = prepare(item)
+        if stored is None:
             return
         self.stats.comments_kept += 1
-        if upsert_comment(self.session, media.id, item, "scrape"):
+        if upsert_comment(self.session, media.id, stored, "scrape"):
             self.stats.comments_inserted += 1
 
     def finish(self, media: Media) -> None:

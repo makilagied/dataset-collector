@@ -4,25 +4,16 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Scrape public comments</h1>
-    <p class="sub">Log in once per platform, list what to scrape, and watch the jobs run. Only comments with an abusive word are kept.</p>
+    <h1>Scrape</h1>
   </div>
 </div>
 
 {% if unavailable %}
-<div class="flash warn"><div>
-  <strong>Scraping is off in this copy of the dashboard</strong> ({{ unavailable }}).
-  It drives a real browser window, so the dashboard has to run on your computer, not in Docker.
-  In a terminal in the project folder run <code>.venv\Scripts\Activate.ps1</code> then
-  <code>collector ui</code>, and open <code>http://127.0.0.1:8001/admin/scrape</code>.
-</div></div>
+<div class="flash warn"><div><strong>Scraping is off in this copy</strong> ({{ unavailable }}). Run <code>collector ui</code> on your computer.</div></div>
 {% endif %}
 
 <div class="panel">
   <h2><span class="step">1</span>Log in</h2>
-  <p class="muted small">A browser window opens on this computer. Log in there and it closes by itself.
-    Do this once per platform; the login is kept until the site logs you out.
-    Use a separate account, not your personal one: scraping can get an account blocked.</p>
   <div class="grid-2" style="gap: 12px">
     {% for platform in ["instagram", "facebook"] %}
     {% set s = logins[platform] %}
@@ -43,13 +34,12 @@
     </div>
     {% endfor %}
   </div>
-  <p class="muted small" style="margin-top: 12px">Facebook: set the account's language to English (Settings → Language), because the scraper clicks English button labels.</p>
 </div>
 
 <div class="grid-2">
 {% for platform, hint in [
-    ("instagram", "One per line: @username, #hashtag, or a post / reel link\n@millardayo\n#udaku\nhttps://www.instagram.com/p/SHORTCODE/"),
-    ("facebook", "One per line: a page / group link (its recent posts) or a post link\nhttps://www.facebook.com/somepage\nhttps://www.facebook.com/somepage/posts/pfbid0...")] %}
+    ("instagram", "@username, #hashtag or post link, one per line"),
+    ("facebook", "Page, group or post link, one per line")] %}
 <div class="panel">
   <h2><span class="step">2</span>Scrape {{ platform|title }}</h2>
   <form method="post" action="/admin/scrape">
@@ -73,10 +63,6 @@
 </div>
 {% endfor %}
 </div>
-<p class="note">Only comments with an abusive word are stored: a word from the Swahili or English
-  lexicon, in any disguised spelling. Words like "dog" or "mbwa" count only when aimed at someone
-  ("you dog", "wewe ni mbwa"). Other comments are read and dropped. To catch a new word, add it to
-  the lexicon.</p>
 
 <div class="panel flush">
   <div class="panel-head">
@@ -97,8 +83,6 @@
     </tr>
     {% endfor %}
   </table></div>
-  {% if active %}<p class="muted small" style="padding-top: 12px; padding-bottom: 14px">A job is running. A scrape takes a few seconds per post; click Refresh to update.
-    Don't touch the browser window while it works.</p>{% endif %}
   {% else %}<div class="empty">{{ icon("scrape") }}No scrapes yet.</div>{% endif %}
 </div>
 
@@ -119,7 +103,6 @@
     </tr>
     {% endfor %}
   </table></div>
-  <p class="muted small" style="padding-top: 12px; padding-bottom: 14px">Next: browse <a href="/admin/comments">Comments</a>, then draw a labelling sample on <a href="/admin/batches">Batches</a>.</p>
   {% else %}<div class="empty">{{ icon("empty") }}Nothing scraped yet.</div>{% endif %}
 </div>
 <datalist id="categories"><option value="udaku"><option value="football"><option value="media"><option value="music"></datalist>

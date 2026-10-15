@@ -156,3 +156,17 @@ def test_protected(token: str) -> None:
 @pytest.mark.parametrize("token", ["m@l@y@", "@", "mjinga", "sawa.sawa"])
 def test_not_protected(token: str) -> None:
     assert not n.is_protected(token)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("mjinga/mpumbavu", "mjinga mpumbavu"),  # two whole words stay apart
+        ("wajinga.wewe", "wajinga wewe"),
+        ("M.J.I.N.G.A", "mjinga"),  # a disguised word is joined
+        ("mji-nga", "mjinga"),
+        ("mala-ya", "malaya"),
+    ],
+)
+def test_separators_join_disguised_words_but_not_whole_words(raw: str, expected: str) -> None:
+    assert n.normalize(raw) == expected

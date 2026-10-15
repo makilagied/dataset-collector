@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     # Store only comments with a Swahili/English abusive word (a lexicon hit), from every
     # source: API backfill, webhooks and scraping. Others are read and dropped.
     store_only_hits: bool = True
+    # Store one comment per set of hit words: a comment whose hit words are exactly those of
+    # a stored comment is not stored; the stored one's `occurrences` goes up instead.
+    dedupe_hits: bool = True
     # Browser profile holding the logged-in Instagram/Facebook sessions used by `scrape`.
     scrape_profile_dir: str = ".scrape-profile"
 

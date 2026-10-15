@@ -23,6 +23,9 @@ def marked(raw: str) -> str:
         ("f*ck you idiot", "[f*ck] you [idiot]"),
         ("@wazirimbwana504 shoga wewe", "@wazirimbwana504 [shoga] wewe"),  # never in a mention
         ("nyie wajinga na wapumbavu", "nyie [wajinga] na [wapumbavu]"),
+        ("mumeo,mkundu wewe", "mumeo,[mkundu] wewe"),  # only the word, not its neighbour
+        ("mjinga/mpumbavu", "[mjinga]/[mpumbavu]"),
+        ("M.J.I.N.G.A, mjinga", "[M.J.I.N.G.A], [mjinga]"),
     ],
 )
 def test_marks_the_hit_words_as_written(raw: str, expected: str) -> None:

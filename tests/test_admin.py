@@ -412,7 +412,7 @@ def test_posts_page_shows_reported_vs_collected(client: TestClient, db: Session)
     assert "Picha yangu mpya" in page and "Mechi ya leo" in page
     assert ">4</div>" in page  # posts card: 3 demo posts + 1
     assert "−3" in page  # per-row gap chip for the post with hidden comments
-    assert "Development mode" in page  # explanation shown when comments are missing
+    assert "Live mode" in page  # hint shown when comments are missing
     assert 'href="/admin/comments?media=' in page
 
 
@@ -428,9 +428,20 @@ def test_comments_filtered_by_post(client: TestClient, db: Session) -> None:
     m3 = db.scalars(select(Media).where(Media.ig_media_id == "demo-M3")).one()
 
     page = client.get(f"/admin/comments?media={m3.id}").text
-    assert "Showing comments on one post" in page
+    assert "Post: " in page
     assert "unakula kama nguruwe" in page and "malaya tu huyu" not in page  # M2 comment
     assert f'name="media" value="{m3.id}"' in page  # filter survives re-filtering
 
     csv_text = client.get(f"/admin/comments/export?fmt=csv&media={m3.id}").content.decode()
     assert "unakula kama nguruwe" in csv_text and "malaya tu huyu" not in csv_text
+
+
+def test_empty_filters_in_links_mean_all(client: TestClient, db: Session) -> None:
+    load_demo(db)
+    for url in [
+        "/admin/comments?account=&show=all&q=&media=&root=&page=2",
+        "/admin/posts?account=&page=1",
+        "/admin/comments/export?account=&show=all&q=&media=&root=&fmt=csv",
+    ]:
+        assert client.get(url).status_code == 200, url
+    assert client.get("/admin/comments?account=abc").status_code == 422

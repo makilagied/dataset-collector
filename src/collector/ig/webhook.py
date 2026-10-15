@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from collector.ig.backfill import upsert_comment
 from collector.models import Account, Media
-from collector.storage_filter import should_store
+from collector.storage_filter import prepare
 
 log = logging.getLogger(__name__)
 
@@ -127,11 +127,12 @@ def ingest(session: Session, payload: dict[str, Any]) -> IngestStats:
             "media": event.value.get("media"),
             "webhook_field": event.field,
         }
-        if not should_store(item.get("text") or ""):
+        stored = prepare(item)
+        if stored is None:
             stats.dropped += 1
             continue
         media_id = _media_row_id(session, account, event.media_id)
-        if upsert_comment(session, media_id, item, "webhook", refresh=False):
+        if upsert_comment(session, media_id, stored, "webhook", refresh=False):
             stats.inserted += 1
         else:
             stats.duplicates += 1

@@ -5,15 +5,15 @@
 <div class="page-head">
   <div>
     <h1>Comments <span class="count">{{ total }}</span></h1>
-    <p class="sub">Every stored comment with its normalized text, matched roots and score.</p>
   </div>
   <div class="actions-row">
-    <span class="muted small">Download these {{ total }}</span>
     <a class="btn sm" href="{{ export_url('csv') }}">CSV</a>
     <a class="btn sm" href="{{ export_url('jsonl') }}">JSONL</a>
   </div>
 </div>
-{% if post %}<div class="flash info"><div>Showing comments on one post: {{ (post.caption or "(no caption)")|truncate(80) }} · <a href="/admin/comments?account={{ filters.account }}&show={{ filters.show }}&q={{ filters.q|urlencode }}">show all posts</a></div></div>{% endif %}
+{% if post %}<div class="flash info"><div>Post: {{ (post.caption or "(no caption)")|truncate(80) }} · <a href="/admin/comments?account={{ filters.account }}&show={{ filters.show }}&q={{ filters.q|urlencode }}">show all posts</a></div></div>{% endif %}
+
+{% if filters.root %}<div class="flash info"><div>Word: <strong>{{ filters.root }}</strong> · <a href="/admin/comments?show={{ filters.show }}">clear</a></div></div>{% endif %}
 
 <form class="panel row" method="get" action="/admin/comments">
   <label>Account
@@ -32,6 +32,7 @@
   </label>
   <label style="flex: 1; min-width: 200px">Text contains<input name="q" value="{{ filters.q }}" placeholder="search…"></label>
   {% if filters.media %}<input type="hidden" name="media" value="{{ filters.media }}">{% endif %}
+  {% if filters.root %}<input type="hidden" name="root" value="{{ filters.root }}">{% endif %}
   <button class="primary">Filter</button>
   <a class="btn ghost" href="/admin/comments">Reset</a>
 </form>
@@ -40,7 +41,7 @@
   {% if rows %}
   <div class="scroll"><table>
     <tr><th>When</th><th>Account</th><th>Comment</th><th>Normalized</th><th>Lang</th>
-        <th>Roots</th><th class="num">Score</th><th>Notes</th></tr>
+        <th>Roots</th><th class="num">Score</th><th class="num">Count</th><th>Notes</th></tr>
     {% for c, f, permalink, username in rows %}
     <tr class="{{ 'hit' if f and f.match_score is not none and f.match_score >= hit_threshold and not f.exclude_reason else '' }}">
       <td class="nowrap muted">{{ c.commented_at|dt }}</td>
@@ -50,11 +51,13 @@
       <td>{% if f and f.lang %}<span class="chip accent">{{ f.lang }}</span>{% else %}—{% endif %}</td>
       <td>{% if f %}{% for r in f.matched_roots %}<span class="chip err">{{ r }}</span>{% endfor %}{% endif %}</td>
       <td class="num"><strong>{{ "%.2f"|format(f.match_score) if f and f.match_score else "" }}</strong></td>
+      <td class="num">{% if c.occurrences > 1 %}<span class="chip accent" title="{{ c.occurrences - 1 }} more comments with the same hit words">×{{ c.occurrences }}</span>{% else %}1{% endif %}</td>
       <td>
         {% if not f %}<span class="chip warn">unprocessed</span>{% endif %}
         {% if f and f.exclude_reason %}<span class="chip">{{ f.exclude_reason }}</span>{% endif %}
         {% if c.parent_ig_comment_id %}<span class="chip">reply</span>{% endif %}
         {% if c.hidden %}<span class="chip">hidden</span>{% endif %}
+        {% if c.raw_json and c.raw_json.get("original_text_length") %}<span class="chip accent" title="cut from {{ c.raw_json.original_text_length }} characters">excerpt</span>{% endif %}
         <span class="chip">{{ c.source }}</span>
       </td>
     </tr>
@@ -67,5 +70,4 @@
   </div>
   {% else %}<div class="empty">{{ icon("comments") }}No comments match.</div>{% endif %}
 </div>
-<p class="note">Highlighted rows are lexicon hits eligible for sampling; <mark>marked</mark> words are what made them hits. Commenter identities are never stored.</p>
 {% endblock %}

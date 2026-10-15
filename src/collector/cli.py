@@ -104,6 +104,64 @@ def process(
         typer.echo("languages: " + ", ".join(f"{k} {v}" for k, v in stats.langs.most_common()))
 
 
+@app.command("trim-long")
+def trim_long(
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Only count what would change")
+    ] = False,
+) -> None:
+    """Cut stored comments longer than 200 characters down to the 150 characters around
+    their hit word; delete long ones with no hit word. Run `process` afterwards."""
+    from collector.pipeline.trim import trim_long_comments
+
+    with session_scope() as session:
+        stats = trim_long_comments(session, dry_run=dry_run)
+    verb = "would be" if dry_run else "were"
+    typer.echo(f"{stats.trimmed} long comments {verb} cut to an excerpt around the hit word")
+    typer.echo(f"{stats.deleted} long comments with no hit word {verb} deleted")
+    if stats.trimmed and not dry_run:
+        if get_settings().dedupe_hits:
+            dedupe(dry_run=False)  # an excerpt may now share its hit words with another
+        typer.echo("run `collector process` to redo their features")
+
+
+@app.command()
+def prune(
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Only count what would be deleted")
+    ] = False,
+) -> None:
+    """Delete stored comments that are no longer lexicon hits (STORE_ONLY_HITS), e.g.
+    after adding a word to the allowlist."""
+    from collector.pipeline.trim import prune_non_hits
+
+    with session_scope() as session:
+        stats = prune_non_hits(session, dry_run=dry_run)
+    verb = "would be" if dry_run else "were"
+    typer.echo(
+        f"{stats.deleted} comments that are no longer hits {verb} deleted"
+        f" ({stats.occurrences} with their repeats)"
+    )
+
+
+@app.command()
+def dedupe(
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Only count what would change")
+    ] = False,
+) -> None:
+    """Keep one comment per set of hit words: merge the others into the earliest one,
+    adding their counts to its occurrences. Run `process` afterwards."""
+    from collector.pipeline.dedupe import dedupe_all
+
+    with session_scope() as session:
+        stats = dedupe_all(session, dry_run=dry_run)
+    verb = "would be" if dry_run else "were"
+    typer.echo(f"{stats.kept} comments kept, {stats.merged} duplicates {verb} merged into them")
+    if stats.merged and not dry_run:
+        typer.echo("run `collector process` to recount hit words")
+
+
 @app.command()
 def sample(
     batch: Annotated[str, typer.Option(help="Name for the new labelling batch")],

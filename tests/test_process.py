@@ -190,3 +190,78 @@ def _no_real_detector(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
     monkeypatch.setattr(langid, "get_detector", lambda: DETECTOR)
     yield
+
+
+def hit_word_counts(db: Session) -> dict[str, tuple[str, int]]:
+    from collector.models import HitWord
+
+    db.expire_all()
+    return {w.word: (w.root, w.count) for w in db.scalars(select(HitWord))}
+
+
+def test_hit_words_stored_per_comment_and_counted_once_each(db: Session, media: Media) -> None:
+    add(db, media, "Wewe ni MJINGA", "mjinga kabisa", "nitakutomba", "m@l@y@ na mjinga", "habari")
+    process(db, detector=DETECTOR)
+
+    feats = features(db)
+    assert feats["Wewe ni MJINGA"].hit_words == ["mjinga"]  # lowercased
+    assert feats["nitakutomba"].hit_words == ["nitakutomba"]
+    assert sorted(feats["m@l@y@ na mjinga"].hit_words) == ["m@l@y@", "mjinga"]
+    assert feats["habari"].hit_words == []
+    assert hit_word_counts(db) == {
+        "mjinga": ("jinga", 3),
+        "nitakutomba": ("tomba", 1),
+        "m@l@y@": ("malaya", 1),
+    }
+
+
+def test_repeats_increment_and_reprocessing_does_not_double_count(
+    db: Session, media: Media
+) -> None:
+    add(db, media, "mjinga wewe")
+    process(db, detector=DETECTOR)
+    add(db, media, "MJINGA sana", "mjinga wewe")  # the second one is a duplicate text
+    process(db, detector=DETECTOR)
+    assert hit_word_counts(db) == {"mjinga": ("jinga", 3)}
+
+    process(db, detector=DETECTOR, reprocess_all=True)
+    process(db, detector=DETECTOR, reprocess_all=True)
+    assert hit_word_counts(db) == {"mjinga": ("jinga", 3)}
+
+
+def test_words_that_stop_matching_lose_their_count(db: Session, media: Media) -> None:
+    from collector.nlp.lexicon import parse_lexicon
+
+    add(db, media, "mjinga", "kufira")
+    process(db, detector=DETECTOR)
+    assert set(hit_word_counts(db)) == {"mjinga", "kufira"}
+
+    only_jinga = parse_lexicon(
+        {"roots": [{"root": "jinga", "prefixes": ["m"], "severity": "medium"}]}
+    )
+    process(db, detector=DETECTOR, lexicon=only_jinga, reprocess_all=True)
+    assert hit_word_counts(db) == {"mjinga": ("jinga", 1)}
+
+
+def hit_root_counts(db: Session) -> dict[str, int]:
+    from collector.models import HitRoot
+
+    db.expire_all()
+    return {r.root: r.count for r in db.scalars(select(HitRoot))}
+
+
+def test_spellings_of_one_root_count_as_one_word(db: Session, media: Media) -> None:
+    add(db, media, "wewe mjinga", "wajinga hawa", "ujinga mtupu", "mjinga na wajinga", "kufira")
+    process(db, detector=DETECTOR)
+    assert features(db)["mjinga na wajinga"].hit_roots == ["jinga"]
+    # every comment counts once per root, whichever spellings it uses
+    assert hit_root_counts(db) == {"jinga": 4, "fira": 1}
+    assert {w: n for w, (_, n) in hit_word_counts(db).items()} == {
+        "mjinga": 2,
+        "wajinga": 2,
+        "ujinga": 1,
+        "kufira": 1,
+    }
+
+    process(db, detector=DETECTOR, reprocess_all=True)
+    assert hit_root_counts(db) == {"jinga": 4, "fira": 1}

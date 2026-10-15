@@ -11,6 +11,10 @@
 #   severity           low | medium | high
 #   context_dependent  true for words that are only abusive when aimed at someone
 #                      (animal words). These count as hits only next to a 2nd-person cue.
+#   verb               true for verbs, written in dictionary form ending in "a" (tomba).
+#                      Any subject/tense/object prefixes may precede it (nitakutomba) and
+#                      the final "a" may become a verb ending (tombe, tombwa, tombana).
+#                      `suffixes` overrides the endings; `prefixes` is not allowed.
 #   notes              free text for reviewers
 
 roots:
@@ -45,6 +49,8 @@ roots:
   - {root: kumama, prefixes: [""], suffixes: [ko, ke, yako, yake, ye, enu], severity: high,
      context_dependent: false,
      notes: "vulgar insult directed at someone's mother (kumamako, kumamake: his/her mother's)"}
+  - {root: mamae, prefixes: [""], severity: high, context_dependent: false, fuzzy: false,
+     notes: "insult at someone's mother (MAMAEE). No typo matching: 'mama', 'mamake' are innocent"}
   - {root: kundu, prefixes: [m, mi], severity: high, context_dependent: false,
      notes: "vulgar (anus) - mkundu"}
   - {root: tako, prefixes: [ma], severity: medium, context_dependent: false,
@@ -72,6 +78,19 @@ roots:
   - {root: takataka, prefixes: [""], severity: medium, context_dependent: true,
      notes: "rubbish"}
 
+  # Vulgar verbs (added 2026-10-15).
+  - {root: tomba, verb: true, severity: high, context_dependent: false,
+     notes: "vulgar: to fuck (kutomba, nitakutomba, tombwa)"}
+  - {root: fira, verb: true, suffixes: [a, wa, ana, ewa], severity: high,
+     context_dependent: false,
+     notes: "vulgar: to sodomise (kufira, firwa). No -e ending: 'fire' is English"}
+  - {root: fila, verb: true, suffixes: [a, wa, ana, ewa], severity: high,
+     context_dependent: false,
+     notes: "l/r spelling of fira (kufila, filwa). No -e ending: 'file' is English"}
+  - {root: gonga, verb: true, severity: medium, context_dependent: true,
+     notes: "slang: to have sex with; usually 'hit / knock' (gonga mlango, amegongwa na
+       gari), so only a hit next to a 2nd-person cue"}
+
 # Innocent words that collide with roots (by fuzzy or skeleton matching). Never matched.
 allowlist:
   # Real words found one letter away from a root in scraped comments (reviewed 2026-10-15).
@@ -84,6 +103,8 @@ allowlist:
   - mkinga      # Mkinga district (mjinga)
   - wakinga
   - mzinga      # beehive / cannon; bata mzinga = turkey (mjinga)
+  - mninga      # mninga tree / its timber (mjinga: n is next to j)
+  - mininga
   - majina      # names (majinga)
   - wajiunga    # they join (wajinga)
   - mkungu      # (mkundu)
@@ -113,6 +134,12 @@ allowlist:
   - mashamba
   - kahawa
   - mbuni
+  - nafila      # voluntary prayer (fila)
+  - safira      # name / sapphire (fira)
+  - gongana     # collide: magari yamegongana (gonga)
+  - kugongana
+  - yamegongana
+  - wamegongana
 
 # Words that point an insult at the reader. A context_dependent root counts as a hit only
 # when one of these is within two tokens of it.

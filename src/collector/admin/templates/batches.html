@@ -4,8 +4,7 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Labelling batches</h1>
-    <p class="sub">Draw stratified samples of processed comments and export them for annotation.</p>
+    <h1>Batches</h1>
   </div>
 </div>
 
@@ -14,7 +13,6 @@
     <h2>Draw a new batch</h2>
     <span class="chip accent">{{ eligible }} eligible</span>
   </div>
-  <p class="muted small" style="margin-top: -4px">A comment is never drawn into two batches.</p>
   <form class="row" method="post" action="/admin/batches">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/batches">
     <label>Name<input name="batch" required pattern="[\w.\-]{1,60}" placeholder="batch-1"></label>
@@ -45,5 +43,4 @@
   </table></div>
   {% else %}<div class="empty">{{ icon("batches") }}No batches yet.</div>{% endif %}
 </div>
-<p class="note">Exports mask @mentions, links and emails, and contain no commenter identifiers.</p>
 {% endblock %}

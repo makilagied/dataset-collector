@@ -14,10 +14,13 @@ from sqlalchemy import delete, literal_column, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from collector.config import get_settings
 from collector.ig.client import GraphClient
 from collector.models import Account, Comment, Media, SyncState
+from collector.nlp.highlight import hit_key
+from collector.pipeline import dedupe
 from collector.security import hash_author
-from collector.storage_filter import should_store
+from collector.storage_filter import prepare
 
 log = logging.getLogger(__name__)
 
@@ -110,7 +113,20 @@ def upsert_comment(
 
     On conflict, `refresh=True` updates text/likes/hidden (backfill has the full record);
     `refresh=False` leaves the existing row alone (webhook payloads are partial).
+
+    With DEDUPE_HITS, a comment with the same hit words as a stored one is not inserted:
+    the stored one's occurrences goes up instead (see pipeline.dedupe).
     """
+    ig_comment_id = str(item["id"])
+    key = None
+    if get_settings().dedupe_hits:
+        if dedupe.is_folded(session, ig_comment_id):
+            return False
+        key = hit_key(item.get("text") or "") or None
+        original = dedupe.original_for(session, key or "", ig_comment_id)
+        if original is not None:
+            dedupe.fold(session, original, ig_comment_id, source)
+            return False
     mutable = {
         "text_raw": item.get("text") or "",
         "like_count": item.get("like_count"),
@@ -118,7 +134,8 @@ def upsert_comment(
         "raw_json": sanitize(item),
     }
     stmt = insert(Comment).values(
-        ig_comment_id=str(item["id"]),
+        ig_comment_id=ig_comment_id,
+        hit_key=key,
         media_id=media_id,
         parent_ig_comment_id=item.get("parent_id") or parent_id,
         author_hash=hash_author(author_identifier(item)),
@@ -230,10 +247,11 @@ class Backfill:
 
     def _store(self, media_id: int, item: dict[str, Any], parent_id: str | None = None) -> None:
         self.stats.comments_seen += 1
-        if not should_store(item.get("text") or ""):
+        stored = prepare(item)
+        if stored is None:
             self.stats.comments_dropped += 1
             return
-        if upsert_comment(self.session, media_id, item, "backfill", parent_id):
+        if upsert_comment(self.session, media_id, stored, "backfill", parent_id):
             self.stats.comments_inserted += 1
 
 

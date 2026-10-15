@@ -36,6 +36,7 @@ ALL_COLUMNS = (
     "matched_roots",
     "hit_words",
     "match_score",
+    "occurrences",
     "is_hit",
     "exclude_reason",
     "is_reply",
@@ -51,6 +52,7 @@ COLUMNS = (
     "text_norm",
     "matched_roots",
     "hit_words",
+    "occurrences",
     "stratum",
     "account_category",
     "commented_at",
@@ -103,6 +105,7 @@ def render_batch(session: Session, batch: str, fmt: str) -> tuple[str, int]:
             Sample.stratum,
             Comment.text_raw,
             Comment.commented_at,
+            Comment.occurrences,
             CommentFeatures.text_norm,
             CommentFeatures.matched_roots,
             Account.category,
@@ -124,6 +127,7 @@ def render_batch(session: Session, batch: str, fmt: str) -> tuple[str, int]:
             "text_norm": mask(r.text_norm or ""),
             "matched_roots": list(r.matched_roots or []),
             "hit_words": _hit_words(r.text_raw),
+            "occurrences": r.occurrences,
             "stratum": r.stratum,
             "account_category": r.category or "",
             "commented_at": r.commented_at.isoformat() if r.commented_at else "",
@@ -178,6 +182,7 @@ def filter_comments[*Ts](
     show: str = "all",
     q: str = "",
     media_id: int | None = None,
+    root: str = "",
 ) -> Select[*Ts]:
     """Filters shared by the admin Comments page and the all-comments export. The query
     must already join Comment, Media, Account and (outer) CommentFeatures."""
@@ -189,6 +194,8 @@ def filter_comments[*Ts](
         query = query.where(Media.id == media_id)
     if q.strip():
         query = query.where(Comment.text_raw.ilike(f"%{q.strip()}%"))
+    if root:
+        query = query.where(CommentFeatures.hit_roots.contains([root]))
     if show == "hits":
         query = query.where(
             CommentFeatures.match_score >= HIT_THRESHOLD, CommentFeatures.exclude_reason.is_(None)
@@ -203,7 +210,7 @@ def filter_comments[*Ts](
 
 
 def _all_comments_query(
-    account_id: int | None, show: str, q: str, media_id: int | None = None
+    account_id: int | None, show: str, q: str, media_id: int | None = None, root: str = ""
 ) -> Select[*tuple[Any, ...]]:
     query = (
         select(
@@ -212,6 +219,7 @@ def _all_comments_query(
             Comment.commented_at,
             Comment.parent_ig_comment_id,
             Comment.source,
+            Comment.occurrences,
             Account.username,
             Account.category,
             CommentFeatures.text_norm,
@@ -225,7 +233,7 @@ def _all_comments_query(
         .join(Account, Account.id == Media.account_id)
         .outerjoin(CommentFeatures, CommentFeatures.comment_id == Comment.id)
     )
-    return filter_comments(query, account_id, show, q, media_id).order_by(Comment.id)
+    return filter_comments(query, account_id, show, q, media_id, root).order_by(Comment.id)
 
 
 def _record(r: Any) -> dict[str, Any]:
@@ -242,6 +250,7 @@ def _record(r: Any) -> dict[str, Any]:
         "matched_roots": list(r.matched_roots or []),
         "hit_words": _hit_words(r.text_raw) if processed else [],
         "match_score": r.match_score if r.match_score is not None else "",
+        "occurrences": r.occurrences,
         "is_hit": (
             bool(
                 r.match_score is not None
@@ -268,6 +277,7 @@ def iter_all_comments(
     show: str = "all",
     q: str = "",
     media_id: int | None = None,
+    root: str = "",
     chunk: int = 1000,
     counter: list[int] | None = None,
 ) -> Iterator[str]:
@@ -275,7 +285,8 @@ def iter_all_comments(
     `counter`, if given, receives the number of rows written."""
     if fmt not in FORMATS:
         raise ExportError(f"format must be one of {FORMATS}")
-    query = _all_comments_query(account_id, show, q, media_id).execution_options(yield_per=chunk)
+    query = _all_comments_query(account_id, show, q, media_id, root)
+    query = query.execution_options(yield_per=chunk)
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=ALL_COLUMNS)
     if fmt == "csv":

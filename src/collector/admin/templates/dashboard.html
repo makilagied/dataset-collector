@@ -5,7 +5,6 @@
 <div class="page-head">
   <div>
     <h1>Overview</h1>
-    <p class="sub">What has been collected so far, and how much of it is ready to sample for labelling.</p>
   </div>
   <div class="actions-row">
     <form class="inline" method="post" action="/admin/process">
@@ -28,7 +27,7 @@
 </div>
 
 {% if unprocessed %}
-<div class="flash info"><div><strong>{{ unprocessed }}</strong> comment(s) not processed yet. Process them so they show up in hits and batches.</div></div>
+<div class="flash info"><div><strong>{{ unprocessed }}</strong> unprocessed comments</div></div>
 {% endif %}
 
 <div class="grid-2">
@@ -45,16 +44,48 @@
         <button>Refresh expiring tokens</button>
       </form>
     </div>
-    <p class="muted small" style="margin-top: 12px">Backfills are started per account on the <a href="/admin/accounts">Accounts</a> page;
-      public comments come from <a href="/admin/scrape">Scrape</a>.</p>
   </div>
   <div class="panel">
-    <h2>Languages <span class="muted" style="font-weight: 400">· eligible comments</span></h2>
+    <h2>Languages</h2>
     {% for lang, n in stats.languages.items() %}<span class="chip accent">{{ lang }} <b>{{ n }}</b></span>{% else %}<span class="muted">—</span>{% endfor %}
     <h2 style="margin-top: 18px">Excluded from sampling</h2>
     {% for reason, n in stats.excluded.items() %}<span class="chip">{{ reason }} <b>{{ n }}</b></span>{% else %}<span class="muted">—</span>{% endfor %}
   </div>
 </div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Top hit words</h2><a class="links" href="/admin/words">All hit words →</a></div>
+  {% if top_words %}
+  <figure class="hbars" role="img" aria-label="Comments per hit word, top {{ top_words|length }}">
+    {% for w in top_words %}
+    <a class="hbar" href="/admin/comments?root={{ w.root|urlencode }}">
+      <span class="hbar-label">{{ w.root }}</span>
+      <span class="hbar-track"><span class="hbar-fill" style="width: {{ '%.1f'|format(w.count / top_max * 90) }}%"></span><span class="hbar-value">{{ w.count }}</span></span>
+      <span class="hbar-tip" role="tooltip"><strong>{{ w.root }}</strong> · {{ w.count }} comments{% if spellings[w.root] %}<br><span class="muted">{{ spellings[w.root]|join(", ") }}</span>{% endif %}</span>
+    </a>
+    {% endfor %}
+  </figure>
+  {% else %}<span class="muted">—</span>{% endif %}
+</div>
+<style>
+  .hbars { margin: 4px 0 0; display: grid; gap: 2px; }
+  .hbar { position: relative; display: grid; grid-template-columns: minmax(64px, 120px) 1fr;
+          align-items: center; gap: 12px; padding: 5px 8px; margin: 0 -8px; border-radius: 8px;
+          color: var(--text); text-decoration: none; }
+  .hbar:hover, .hbar:focus-visible { background: var(--panel-2); text-decoration: none; }
+  .hbar-label { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hbar-track { height: 18px; display: flex; align-items: center; gap: 8px; }
+  .hbar-fill { display: block; height: 14px; min-width: 3px; background: var(--bar);
+               border-radius: 0 4px 4px 0; transition: filter .12s; }
+  .hbar:hover .hbar-fill { filter: brightness(1.12); }
+  .hbar-value { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; color: var(--muted); }
+  .hbar-tip { display: none; position: absolute; z-index: 5; left: 140px; bottom: calc(100% - 2px);
+              background: var(--panel); border: 1px solid var(--border-strong); border-radius: 8px;
+              box-shadow: var(--shadow-lg); padding: 8px 10px; font-size: 12.5px; line-height: 1.45;
+              max-width: 340px; pointer-events: none; }
+  .hbar:hover .hbar-tip, .hbar:focus-visible .hbar-tip { display: block; }
+  @media (max-width: 560px) { .hbar { grid-template-columns: 76px 1fr; gap: 8px; } .hbar-tip { left: 8px; } }
+</style>
 
 <div class="panel flush">
   <div class="panel-head"><h2>Recent jobs</h2><a class="links" href="/admin/jobs">All jobs →</a></div>

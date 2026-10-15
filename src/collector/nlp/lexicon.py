@@ -3,6 +3,10 @@
 Each file declares its `language`. Swahili roots are matched against fully normalized text;
 English roots against text normalized without the Swahili shorthand step, which would
 otherwise rewrite English spellings ("fuck" -> "fusik"). See matcher.match.
+
+Verb roots (`verb: true`) are written in their dictionary form ("tomba"). Any chain of
+subject, tense and object prefixes may come before the stem ("nitakutomba"), and the final
+"a" is replaced by one of the verb endings ("tombe", "tombwa", "tombana").
 """
 
 import re
@@ -18,6 +22,10 @@ SEVERITIES = {"low": 0.4, "medium": 0.7, "high": 1.0}
 VOWELS = set("aeiou")
 # Up to two non-letter characters may sit between letters ("mj#inga", "mji'nga").
 JUNK = r"[^\sa-z]{0,2}"
+# Before a verb stem: subject + tense + object markers, e.g. "ni-ta-ku", "wa-me-m".
+VERB_PREFIX = r"[a-z]{0,10}"
+# Endings that replace a verb's final "a": subjunctive, passive, reciprocal, stative.
+VERB_ENDINGS = ("a", "e", "wa", "we", "ana", "ewa", "eka")
 
 
 class LexiconError(ValueError):
@@ -39,11 +47,17 @@ class Root:
     suffixes: tuple[str, ...] = ("",)
     lang: str = "sw"
     fuzzy: bool = True  # allow typo (Levenshtein) matches
+    verb: bool = False
+
+    @property
+    def stem(self) -> str:
+        """What the suffixes attach to: the root, or a verb without its final "a"."""
+        return self.root[:-1] if self.verb else self.root
 
     @property
     def forms(self) -> tuple[str, ...]:
-        """Every surface form: prefix + root + suffix."""
-        return tuple(p + self.root + s for p in self.prefixes for s in self.suffixes)
+        """Every surface form: prefix + stem + suffix (verbs: with no prefix)."""
+        return tuple(p + self.stem + s for p in self.prefixes for s in self.suffixes)
 
     @property
     def weight(self) -> float:
@@ -51,8 +65,9 @@ class Root:
 
     @property
     def skeleton_ok(self) -> bool:
-        """Dropped-vowel matching is only safe for roots with 3+ consonants."""
-        return len(skeleton(self.root)) >= 3
+        """Dropped-vowel matching is only safe for roots with 3+ consonants, and not for
+        verbs, whose short stems collide with English ("tomb" for "tomba")."""
+        return not self.verb and len(skeleton(self.root)) >= 3
 
 
 @dataclass(frozen=True)
@@ -77,11 +92,12 @@ def _affix(affixes: tuple[str, ...], before: bool) -> str:
 
 
 def build_pattern(
-    root: str, prefixes: tuple[str, ...], suffixes: tuple[str, ...] = ("",)
+    root: str, prefixes: tuple[str, ...], suffixes: tuple[str, ...] = ("",), verb: bool = False
 ) -> re.Pattern[str]:
     """Prefix + root + suffix; letters may repeat and carry junk between them."""
     body = JUNK.join(f"{re.escape(ch)}+" for ch in root)
-    prefix, suffix = _affix(prefixes, before=True), _affix(suffixes, before=False)
+    prefix = VERB_PREFIX if verb else _affix(prefixes, before=True)
+    suffix = _affix(suffixes, before=False)
     return re.compile(rf"(?<![a-z]){prefix}{body}{suffix}(?![a-z])")
 
 
@@ -97,18 +113,28 @@ def _parse_root(entry: Any, index: int, lang: str, defaults: dict[str, Any]) -> 
         raise LexiconError(f"roots[{index}]: root {root!r} must be lowercase letters")
     if severity not in SEVERITIES:
         raise LexiconError(f"roots[{index}]: severity must be one of {sorted(SEVERITIES)}")
+    verb = bool(entry.get("verb", False))
+    if verb:
+        if entry.get("prefixes"):
+            raise LexiconError(f"roots[{index}]: a verb takes any prefix; drop 'prefixes'")
+        if not root.endswith("a") or len(root) < 3:
+            raise LexiconError(f"roots[{index}]: verb {root!r} must end in 'a' (tomba)")
     prefixes = tuple(str(p).lower() for p in entry.get("prefixes") or [""])
-    suffixes = tuple(str(s).lower() for s in entry.get("suffixes") or [""])
+    default_suffixes = VERB_ENDINGS if verb else [""]
+    suffixes = tuple(str(s).lower() for s in entry.get("suffixes") or default_suffixes)
+    stem = root[:-1] if verb else root
     return Root(
         root=root,
         prefixes=prefixes,
         severity=severity,
         context_dependent=bool(entry.get("context_dependent", False)),
         notes=str(entry.get("notes") or ""),
-        pattern=build_pattern(root, prefixes, suffixes),
+        pattern=build_pattern(stem, prefixes, suffixes, verb),
         suffixes=suffixes,
         lang=lang,
-        fuzzy=bool(entry.get("fuzzy", defaults.get("fuzzy", True))),
+        # Typo matching scores prefix + root + suffix; verbs have open-ended prefixes.
+        fuzzy=not verb and bool(entry.get("fuzzy", defaults.get("fuzzy", True))),
+        verb=verb,
     )
 
 

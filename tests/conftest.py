@@ -29,6 +29,7 @@ TEST_ENV = {
     "ADMIN_ALLOW_REMOTE": "false",
     # Most tests store innocent sample comments; test_store_only_hits.py turns this on.
     "STORE_ONLY_HITS": "false",
+    "DEDUPE_HITS": "false",
 }
 
 

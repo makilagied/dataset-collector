@@ -161,7 +161,20 @@ def separators(text: str) -> str:
         else:
             out.append(tokens[i])
             i += 1
-    return " ".join(t if is_protected(t) else _INNER_SEP.sub("", t) for t in out)
+    return " ".join(t if is_protected(t) else _inner_separators(t) for t in out)
+
+
+_SPLIT_SEP = re.compile(rf"[{_SEP_CHARS}]+")
+WORD_PIECE = 4  # pieces this long on both sides of a separator are separate words
+
+
+def _inner_separators(token: str) -> str:
+    """Join pieces of a disguised word ("M.J.I.N.G.A", "mji-nga"), but keep whole words
+    apart ("mjinga/mpumbavu", "wajinga.wewe") so each can be matched."""
+    pieces = [p for p in _SPLIT_SEP.split(token) if p]
+    if len(pieces) > 1 and all(len(p) >= WORD_PIECE for p in pieces):
+        return _INNER_SEP.sub(" ", token)
+    return _INNER_SEP.sub("", token)
 
 
 # --- 4. leetspeak --------------------------------------------------------------------

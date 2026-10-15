@@ -83,3 +83,13 @@ def test_cli_demo_process_stats(db: Session, monkeypatch: pytest.MonkeyPatch) ->
     assert count(db, Sample) == 0
     result = runner.invoke(app, ["demo", "remove"])
     assert result.exit_code == 0 and "removed demo account and 45 comments" in result.output
+
+
+def test_removing_demo_takes_its_words_out_of_the_hit_word_counts(db: Session) -> None:
+    from collector.models import HitWord
+
+    load_demo(db)
+    process(db, detector=HeuristicDetector())
+    assert count(db, HitWord) > 0
+    remove_demo(db)
+    assert count(db, HitWord) == 0

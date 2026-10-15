@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon %}
+{% set title = "Hit words" %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Hit words <span class="count">{{ total }}</span></h1>
+  </div>
+  <form class="row" method="get" action="/admin/words">
+    <input name="q" value="{{ q }}" placeholder="search…" aria-label="Search words">
+    <button class="primary">Search</button>
+    {% if q %}<a class="btn ghost" href="/admin/words">Reset</a>{% endif %}
+  </form>
+</div>
+
+<div class="panel flush">
+  {% if rows %}
+  <div class="scroll"><table>
+    <tr><th>Word</th><th class="num">Comments</th><th>Spellings</th><th>Last seen</th><th></th></tr>
+    {% for r in rows %}
+    <tr>
+      <td><strong>{{ r.root }}</strong></td>
+      <td class="num"><strong>{{ r.count }}</strong></td>
+      <td>{% for w in forms[r.root] %}<span class="chip">{{ w.word }} <b>{{ w.count }}</b></span>{% endfor %}</td>
+      <td class="nowrap muted">{{ r.last_seen_at|dt }}</td>
+      <td class="nowrap"><a href="/admin/comments?root={{ r.root|urlencode }}">comments →</a></td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  <div class="pager">
+    <span>{% if page > 1 %}<a class="btn sm" href="{{ page_url(page - 1) }}">← Previous</a>{% endif %}</span>
+    <span class="muted">Page {{ page }} of {{ pages }}</span>
+    <span>{% if page < pages %}<a class="btn sm" href="{{ page_url(page + 1) }}">Next →</a>{% endif %}</span>
+  </div>
+  {% else %}<div class="empty">{{ icon("words") }}No hit words yet.</div>{% endif %}
+</div>
+{% endblock %}

@@ -58,6 +58,10 @@ class Comment(Base):
     __table_args__ = (
         Index("ix_comments_media_id", "media_id"),
         Index("ix_comments_commented_at", "commented_at"),
+        # One stored comment per set of hit words (see pipeline.dedupe).
+        Index(
+            "ux_comments_hit_key", "hit_key", unique=True, postgresql_where=text("hit_key <> ''")
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -74,6 +78,22 @@ class Comment(Base):
     ingested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    # Its distinct hit words, sorted and joined; NULL until deduplicated (DEDUPE_HITS).
+    hit_key: Mapped[str | None] = mapped_column(Text)
+    # This comment plus every later comment with the same hit words that was not stored.
+    occurrences: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"))
+
+
+class CommentDuplicate(Base):
+    """A comment that was not stored because a stored comment has the same hit words.
+    Remembered so syncing the same post again does not count it twice."""
+
+    __tablename__ = "comment_duplicates"
+
+    ig_comment_id: Mapped[str] = mapped_column(String, primary_key=True)
+    comment_id: Mapped[int] = mapped_column(ForeignKey("comments.id"), index=True)
+    source: Mapped[str] = mapped_column(String)
+    seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class CommentFeatures(Base):
@@ -94,10 +114,38 @@ class CommentFeatures(Base):
     matched_roots: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     match_methods: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     match_score: Mapped[float | None] = mapped_column(Float)
+    # The highlighted hit words, lowercased and distinct ("m@l@y@", "nitakutomba").
+    hit_words: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default=text("'{}'")
+    )
+    # The roots behind them: "wajinga" and "ujinga" are both "jinga".
+    hit_roots: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default=text("'{}'")
+    )
+    # The comment's occurrences when its words were counted into hit_words / hit_roots.
+    hit_weight: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"))
     processed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
     pipeline_version: Mapped[str] = mapped_column(String)
+
+
+class HitWord(Base):
+    """Every distinct highlighted spelling of a hit word ("wajinga", "m@l@y@"), with how many
+    comments contain it. Kept in step with comment_features.hit_words by pipeline.hitwords.
+    """
+
+    __tablename__ = "hit_words"
+
+    word: Mapped[str] = mapped_column(Text, primary_key=True)
+    root: Mapped[str] = mapped_column(String)
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class Sample(Base):
@@ -131,3 +179,21 @@ class SyncState(Base):
 
     key: Mapped[str] = mapped_column(String, primary_key=True)
     value: Mapped[dict[str, Any]] = mapped_column(JSONB)
+
+
+class HitRoot(Base):
+    """Every lexicon root that has been a hit, counting all its spellings as one word: the
+    number of comments containing any form of it ("mjinga", "wajinga", "ujinga" -> "jinga").
+    Kept in step with comment_features.hit_roots by pipeline.hitwords.
+    """
+
+    __tablename__ = "hit_roots"
+
+    root: Mapped[str] = mapped_column(String, primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

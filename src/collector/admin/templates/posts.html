@@ -5,7 +5,6 @@
 <div class="page-head">
   <div>
     <h1>Posts</h1>
-    <p class="sub">Posts per account, and how many of their comments were actually collected.</p>
   </div>
   <form class="row" method="get" action="/admin/posts">
     <label>Account
@@ -26,13 +25,7 @@
 </div>
 
 {% if missing %}
-<div class="flash warn"><div>
-  {{ missing }} comment(s) that Instagram counts on these posts were not collected.
-  First run a <strong>Backfill</strong> on the <a href="/admin/accounts">Accounts</a> page.
-  If the gap stays, Instagram is withholding them: while the Meta app is in
-  <strong>Development mode</strong>, comments from people who have no role on the app are hidden.
-  Switching the app to <strong>Live mode</strong> fixes this.
-</div></div>
+<div class="flash warn"><div>{{ missing }} comments not collected. Backfill again; if the gap stays, switch the Meta app to Live mode.</div></div>
 {% endif %}
 
 <div class="panel flush">
@@ -66,8 +59,6 @@
     <span class="muted">Page {{ page }} of {{ pages }}</span>
     <span>{% if page < pages %}<a class="btn sm" href="{{ page_url(page + 1) }}">Older →</a>{% endif %}</span>
   </div>
-  {% else %}<div class="empty">{{ icon("posts") }}No posts yet. Run a Backfill on the <a href="/admin/accounts">Accounts</a> page.</div>{% endif %}
+  {% else %}<div class="empty">{{ icon("posts") }}No posts yet.</div>{% endif %}
 </div>
-<p class="note">"Instagram count" is the <code>comments_count</code> Instagram reported at the last backfill
-  (it includes replies). Highlighted rows have comments that were not collected.</p>
 {% endblock %}

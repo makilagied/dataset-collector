@@ -25,13 +25,14 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
+from pydantic import BeforeValidator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from collector.admin import jobs
 from collector.config import Settings, get_settings
 from collector.db import get_sessionmaker
-from collector.models import Account, Comment, CommentFeatures, Job, Media
+from collector.models import Account, Comment, CommentFeatures, HitRoot, HitWord, Job, Media
 from collector.nlp.highlight import segments
 from collector.pipeline.export import (
     FORMATS,
@@ -47,6 +48,8 @@ from collector.pipeline.scoring import SCORERS
 from collector.pipeline.stats import collect_stats
 
 PAGE_SIZE = 50
+# An optional id filter: links and forms send "account=" for "all", which means None.
+OptionalId = Annotated[int | None, BeforeValidator(lambda v: v or None), Query()]
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 templates.env.filters["dt"] = lambda v: v.strftime("%Y-%m-%d %H:%M") if v else "—"
 _basic = HTTPBasic(auto_error=False)
@@ -237,12 +240,23 @@ def logout(form: Form) -> Response:
 def dashboard(request: Request, db: Db, settings: SettingsDep) -> HTMLResponse:
     stats = collect_stats(db)
     recent = db.scalars(select(Job).order_by(Job.id.desc()).limit(6)).all()
+    top_words = db.scalars(
+        select(HitRoot).order_by(HitRoot.count.desc(), HitRoot.root).limit(15)
+    ).all()
+    spellings: dict[str, list[str]] = {r.root: [] for r in top_words}
+    for w in db.scalars(
+        select(HitWord).where(HitWord.root.in_(spellings)).order_by(HitWord.count.desc())
+    ):
+        spellings[w.root].append(f"{w.word} {w.count}")
     return render(
         request,
         "dashboard.html",
         settings,
         stats=stats,
         recent_jobs=recent,
+        top_words=top_words,
+        top_max=max((r.count for r in top_words), default=0),
+        spellings=spellings,
         unprocessed=stats.comments - stats.processed,
     )
 
@@ -478,7 +492,7 @@ def posts(
     request: Request,
     db: Db,
     settings: SettingsDep,
-    account: Annotated[int | None, Query()] = None,
+    account: OptionalId = None,
     page: Annotated[int, Query(ge=1)] = 1,
 ) -> HTMLResponse:
     """Posts with Instagram's reported comment count next to what was actually collected."""
@@ -550,10 +564,11 @@ def comments(
     request: Request,
     db: Db,
     settings: SettingsDep,
-    account: Annotated[int | None, Query()] = None,
+    account: OptionalId = None,
     show: str = "all",
     q: str = "",
-    media: Annotated[int | None, Query()] = None,
+    media: OptionalId = None,
+    root: str = "",
     page: Annotated[int, Query(ge=1)] = 1,
 ) -> HTMLResponse:
     if show not in SHOW_FILTERS:
@@ -567,6 +582,7 @@ def comments(
         show,
         q,
         media,
+        root,
     )
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     rows = db.execute(
@@ -575,7 +591,7 @@ def comments(
         .limit(PAGE_SIZE)
     ).all()
     accounts_list = db.scalars(select(Account).order_by(Account.username)).all()
-    filters = {"account": account or "", "show": show, "q": q, "media": media or ""}
+    filters = {"account": account or "", "show": show, "q": q, "media": media or "", "root": root}
     return render(
         request,
         "comments.html",
@@ -598,10 +614,11 @@ def comments(
 def export_comments(
     factory: Factory,
     fmt: str = "csv",
-    account: Annotated[int | None, Query()] = None,
+    account: OptionalId = None,
     show: str = "all",
     q: str = "",
-    media: Annotated[int | None, Query()] = None,
+    media: OptionalId = None,
+    root: str = "",
 ) -> Response:
     """Download every comment matching the filters (abusive or not), anonymized."""
     if fmt not in FORMATS or show not in SHOW_FILTERS:
@@ -611,7 +628,7 @@ def export_comments(
         # Own session: the request's dependency session is closed before streaming starts.
         with factory() as session:
             for piece in iter_all_comments(
-                session, fmt, account_id=account, show=show, q=q, media_id=media
+                session, fmt, account_id=account, show=show, q=q, media_id=media, root=root
             ):
                 yield piece.encode("utf-8")
 
@@ -683,6 +700,54 @@ def download_batch(name: str, db: Db, fmt: str = "csv") -> Response:
         text.encode(file_encoding(fmt)),
         media_type=f"{media}; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{safe}.{fmt}"'},
+    )
+
+
+# --- hit words -----------------------------------------------------------------------
+
+
+@router.get("/words", response_class=HTMLResponse)
+def hit_word_list(
+    request: Request,
+    db: Db,
+    settings: SettingsDep,
+    q: str = "",
+    page: Annotated[int, Query(ge=1)] = 1,
+) -> HTMLResponse:
+    """One row per root ("jinga"), with the spellings seen ("mjinga", "wajinga", ...)."""
+    query = select(HitRoot)
+    if q:
+        needle = q.lower()
+        spelled = select(HitWord.root).where(HitWord.word.contains(needle, autoescape=True))
+        query = query.where(
+            HitRoot.root.contains(needle, autoescape=True) | HitRoot.root.in_(spelled)
+        )
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    rows = db.scalars(
+        query.order_by(HitRoot.count.desc(), HitRoot.root)
+        .offset((page - 1) * PAGE_SIZE)
+        .limit(PAGE_SIZE)
+    ).all()
+    forms: dict[str, list[HitWord]] = {r.root: [] for r in rows}
+    for w in db.scalars(
+        select(HitWord).where(HitWord.root.in_(forms)).order_by(HitWord.count.desc(), HitWord.word)
+    ):
+        forms[w.root].append(w)
+
+    def page_url(n: int) -> str:
+        return "/admin/words?" + urlencode({"q": q, "page": n})
+
+    return render(
+        request,
+        "words.html",
+        settings,
+        rows=rows,
+        forms=forms,
+        total=total,
+        q=q,
+        page=page,
+        pages=max(1, -(-total // PAGE_SIZE)),
+        page_url=page_url,
     )
 
 
