@@ -358,6 +358,14 @@ MaxComments = Annotated[int, typer.Option(help="Comments per post")]
 Category = Annotated[str | None, typer.Option(help="Category stored with these sources")]
 Delay = Annotated[float, typer.Option(help="Average seconds between requests")]
 Refresh = Annotated[bool, typer.Option(help="Rescrape posts already scraped")]
+OnlyHits = Annotated[
+    bool | None,
+    typer.Option(
+        "--only-hits/--everything",
+        help="Store only comments matching the lexicon keywords, or every comment "
+        "(default: STORE_ONLY_HITS)",
+    ),
+]
 
 
 @scrape_app.command("login")
@@ -413,6 +421,7 @@ def scrape_instagram(
     category: Category = None,
     delay: Delay = 4.0,
     refresh: Refresh = False,
+    only_hits: OnlyHits = None,
 ) -> None:
     """Scrape comments from @users, #hashtags or post URLs."""
     from collector.scrape.run import ScrapeOptions
@@ -424,6 +433,7 @@ def scrape_instagram(
         category=category,
         delay=delay,
         refresh=refresh,
+        only_hits=only_hits,
     )
     _run_scrape("instagram", targets, options)
 
@@ -436,6 +446,7 @@ def scrape_facebook(
     category: Category = None,
     delay: Delay = 4.0,
     refresh: Refresh = False,
+    only_hits: OnlyHits = None,
 ) -> None:
     """Scrape comments from page / group URLs (recent posts) or post URLs."""
     from collector.scrape.run import ScrapeOptions
@@ -446,6 +457,7 @@ def scrape_facebook(
         category=category,
         delay=delay,
         refresh=refresh,
+        only_hits=only_hits,
     )
     _run_scrape("facebook", targets, options)
 
@@ -461,6 +473,7 @@ def scrape_tiktok(
     category: Category = None,
     delay: Delay = 4.0,
     refresh: Refresh = False,
+    only_hits: OnlyHits = None,
 ) -> None:
     """Scrape comments from @users, #hashtags or video URLs. No login needed (log in
     with `scrape login tiktok` if TikTok starts asking). Keep the browser window visible:
@@ -474,6 +487,7 @@ def scrape_tiktok(
         category=category,
         delay=delay,
         refresh=refresh,
+        only_hits=only_hits,
     )
     _run_scrape("tiktok", targets, options)
 

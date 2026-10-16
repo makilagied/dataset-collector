@@ -42,6 +42,7 @@ class ScrapeOptions:
     category: str | None = None
     delay: float = 4.0
     refresh: bool = False
+    only_hits: bool | None = None  # None: follow STORE_ONLY_HITS; False: store everything
 
 
 @dataclass
@@ -145,6 +146,7 @@ def run_scrape(
                 since=options.since,
                 category=options.category,
                 refresh=options.refresh,
+                only_hits=options.only_hits,
                 progress=progress,
             )
         elif platform == "instagram":
@@ -158,6 +160,7 @@ def run_scrape(
                 since=options.since,
                 category=options.category,
                 refresh=options.refresh,
+                only_hits=options.only_hits,
                 progress=progress,
             )
         else:
@@ -169,6 +172,7 @@ def run_scrape(
                 max_comments=options.max_comments,
                 category=options.category,
                 refresh=options.refresh,
+                only_hits=options.only_hits,
                 progress=progress,
             )
         for target in targets:

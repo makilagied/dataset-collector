@@ -8,6 +8,9 @@ abusive in context.
 Comments longer than MAX_TEXT characters (posts pasted as comments, essays) are not kept
 whole: only an excerpt of at most EXCERPT_CHARS characters around the first hit word is
 stored, cut at word boundaries. A long comment with no hit word is dropped.
+
+A scrape can override this per run: only_hits=True stores only hits whatever the setting,
+only_hits=False stores every comment whole, as scraped.
 """
 
 import re
@@ -59,19 +62,24 @@ def excerpt(text: str, limit: int = EXCERPT_CHARS) -> str | None:
     return text[lo:hi]
 
 
-def text_to_store(text: str) -> str | None:
-    """The text to store for a comment (whole, or an excerpt if long), or None to drop it."""
-    if get_settings().store_only_hits and not is_hit(text):
+def text_to_store(text: str, only_hits: bool | None = None) -> str | None:
+    """The text to store for a comment (whole, or an excerpt if long), or None to drop it.
+    only_hits=None follows STORE_ONLY_HITS; False keeps every comment whole."""
+    if only_hits is False:
+        return text
+    if only_hits is None:
+        only_hits = get_settings().store_only_hits
+    if only_hits and not is_hit(text):
         return None
     if len(text) <= MAX_TEXT:
         return text
     return excerpt(text)
 
 
-def prepare(item: dict[str, Any]) -> dict[str, Any] | None:
+def prepare(item: dict[str, Any], only_hits: bool | None = None) -> dict[str, Any] | None:
     """The comment payload to store, with its text cut down if long; None to drop it."""
     text = item.get("text") or ""
-    stored = text_to_store(text)
+    stored = text_to_store(text, only_hits)
     if stored is None:
         return None
     if stored == text:

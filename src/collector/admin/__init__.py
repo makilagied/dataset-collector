@@ -412,6 +412,7 @@ def scrape_page(request: Request, db: Db, settings: SettingsDep) -> HTMLResponse
         sources=sources,
         recent_jobs=recent,
         active=any(j.status in jobs.ACTIVE for j in recent),
+        store_only_hits=settings.store_only_hits,
     )
 
 
@@ -489,6 +490,11 @@ def scrape_start(db: Db, factory: Factory, form: Form) -> Response:
     for flag in ("refresh", "process"):
         if form.get(flag) == "1":
             params[flag] = True
+    store = form.get("store", "")
+    if store not in ("", "hits", "all"):
+        return error("Store must be hits or all")
+    if store:
+        params["store"] = store
     label = f"{PLATFORM_LABELS[platform]} scrape of {len(targets)} target(s)"
     return _queue(db, factory, form, "scrape", params, label)
 

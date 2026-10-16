@@ -113,6 +113,7 @@ def _scrape(session: Session, params: dict[str, Any]) -> str:
         category=params.get("category") or None,
         delay=float(params.get("delay", 4.0)),
         refresh=bool(params.get("refresh")),
+        only_hits={"hits": True, "all": False}.get(params.get("store", "")),
     )
     latest: dict[str, str] = {}  # one progress line per source, in scrape order
 

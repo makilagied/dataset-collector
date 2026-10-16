@@ -89,13 +89,14 @@ def test_scrape_job_runs_with_options(
         since="2026-02-01",
         category="Udaku",
         process="1",
+        store="all",
     )
     assert status == 303 and "kind=ok" in loc
     call = fake_scrape[0]
     assert call["targets"] == ["@mama", "#udaku"]  # split and de-duplicated
     o = call["options"]
     assert (o.max_posts, o.max_comments, o.delay, str(o.since)) == (5, 100, 2.5, "2026-02-01")
-    assert (o.category, o.refresh) == ("udaku", False)
+    assert (o.category, o.refresh, o.only_hits) == ("udaku", False, False)
     assert call["mid_run"] == "mama: posts: 1 scraped"
     job = last_job(db)
     assert job.status == "done"

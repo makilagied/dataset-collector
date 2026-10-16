@@ -151,3 +151,17 @@ def test_prune_deletes_stored_comments_that_are_no_longer_hits(
     assert prune_non_hits(db).deleted == 1
     db.expire_all()
     assert list(db.scalars(select(Comment.text_raw))) == ["wewe ni mjinga"]
+
+
+def test_per_run_override(only_hits: None) -> None:
+    long = "habari " * 60
+    assert text_to_store("habari za asubuhi", only_hits=False) == "habari za asubuhi"
+    assert text_to_store(long, only_hits=False) == long  # kept whole
+    assert prepare({"text": long}, only_hits=False) == {"text": long}
+    assert text_to_store("habari za asubuhi") is None  # None follows the setting
+
+
+def test_per_run_only_hits_beats_setting() -> None:
+    assert should_store("habari za asubuhi")  # tests default to storing everything
+    assert text_to_store("habari za asubuhi", only_hits=True) is None
+    assert text_to_store("wewe ni mjinga", only_hits=True) == "wewe ni mjinga"

@@ -228,6 +228,7 @@ class TikTokScraper:
         category: str | None = None,
         refresh: bool = False,
         progress: Callable[[str], None] | None = None,
+        only_hits: bool | None = None,
     ):
         self.session = session
         self.site = site
@@ -237,6 +238,7 @@ class TikTokScraper:
         self.since = since
         self.category = category
         self.refresh = refresh
+        self.only_hits = only_hits
         self.progress = progress
 
     def scrape(self, raw_target: str) -> ScrapeStats:
@@ -254,7 +256,9 @@ class TikTokScraper:
             handle, videos = author_name(opened) or "videos", iter([opened])
 
         account = ensure_account(self.session, "tiktok", handle, self.category)
-        store = Store(self.session, account, stats, self.refresh, self.progress)
+        store = Store(
+            self.session, account, stats, self.refresh, self.progress, self.only_hits
+        )
         failures = 0
         for n, video in enumerate(videos):
             if n >= self.max_posts:

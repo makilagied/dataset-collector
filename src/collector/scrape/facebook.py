@@ -206,6 +206,7 @@ class FacebookScraper:
         category: str | None = None,
         refresh: bool = False,
         progress: Callable[[str], None] | None = None,
+        only_hits: bool | None = None,
         max_rounds: int = 80,
     ):
         self.session = session
@@ -215,6 +216,7 @@ class FacebookScraper:
         self.max_comments = max_comments
         self.category = category
         self.refresh = refresh
+        self.only_hits = only_hits
         self.progress = progress
         self.max_rounds = max_rounds
         self.captured: list[str] = []
@@ -237,7 +239,9 @@ class FacebookScraper:
         stats = ScrapeStats()
         urls = [target.url] if target.kind == "post" else self._page_posts(target.url)
         account = ensure_account(self.session, "facebook", target.handle, self.category)
-        store = Store(self.session, account, stats, self.refresh, self.progress)
+        store = Store(
+            self.session, account, stats, self.refresh, self.progress, self.only_hits
+        )
         for url in urls[: self.max_posts]:
             media_id = f"fb:{post_key(url)}"
             if store.unchanged(media_id, None):

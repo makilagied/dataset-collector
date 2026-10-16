@@ -57,6 +57,11 @@
       <label>Category (optional)<input name="category" placeholder="udaku, football…" list="categories"></label>
     </div>
     <div class="row" style="margin-top: 14px; gap: 18px">
+      <span class="small muted">Store</span>
+      <label class="check"><input type="radio" name="store" value="hits" {% if store_only_hits %}checked{% endif %}> Only comments matching configured keywords</label>
+      <label class="check"><input type="radio" name="store" value="all" {% if not store_only_hits %}checked{% endif %}> Everything</label>
+    </div>
+    <div class="row" style="margin-top: 14px; gap: 18px">
       <label class="check"><input type="checkbox" name="refresh" value="1"> Rescrape posts already done</label>
       <label class="check"><input type="checkbox" name="process" value="1" checked> Process new comments when finished</label>
     </div>

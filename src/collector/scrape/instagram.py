@@ -172,6 +172,7 @@ class InstagramScraper:
         category: str | None = None,
         refresh: bool = False,
         progress: Callable[[str], None] | None = None,
+        only_hits: bool | None = None,
     ):
         self.session = session
         self.fetch = fetch
@@ -182,6 +183,7 @@ class InstagramScraper:
         self.since = since
         self.category = category
         self.refresh = refresh
+        self.only_hits = only_hits
         self.progress = progress
 
     def scrape(self, raw_target: str) -> ScrapeStats:
@@ -197,7 +199,9 @@ class InstagramScraper:
             handle, posts = owner, iter([post])
 
         account = ensure_account(self.session, "instagram", handle, self.category)
-        store = Store(self.session, account, stats, self.refresh, self.progress)
+        store = Store(
+            self.session, account, stats, self.refresh, self.progress, self.only_hits
+        )
         for n, m in enumerate(posts):
             if n >= self.max_posts:
                 break

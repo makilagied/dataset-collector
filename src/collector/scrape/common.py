@@ -105,12 +105,14 @@ class Store:
         stats: ScrapeStats,
         refresh: bool = False,
         progress: Callable[[str], None] | None = None,
+        only_hits: bool | None = None,
     ):
         self.session = session
         self.account = account
         self.stats = stats
         self.refresh = refresh
         self.progress = progress
+        self.only_hits = only_hits  # None: follow STORE_ONLY_HITS
 
     def unchanged(self, media_id: str, comments_count: int | None) -> bool:
         """True if this post was fully scraped before and its comment count hasn't moved.
@@ -131,7 +133,7 @@ class Store:
 
     def comment(self, media: Media, item: dict[str, Any]) -> None:
         self.stats.comments_seen += 1
-        stored = prepare(item)
+        stored = prepare(item, self.only_hits)
         if stored is None:
             return
         self.stats.comments_kept += 1
