@@ -22,8 +22,12 @@ from collector.models import Account, Media
 from collector.storage_filter import prepare
 
 SCRAPE_PREFIX = "scrape:"
-PLATFORMS = ("instagram", "facebook")
-_SHORT = {"instagram": "ig", "facebook": "fb"}
+PLATFORMS = ("instagram", "facebook", "tiktok")
+_SHORT = {"instagram": "ig", "facebook": "fb", "tiktok": "tt"}
+PLATFORM_NAMES = {"ig": "Instagram", "fb": "Facebook", "tt": "TikTok"}
+PLATFORM_LABELS = {p: PLATFORM_NAMES[_SHORT[p]] for p in PLATFORMS}
+# TikTok shows public videos and comments without an account; logging in is optional.
+LOGIN_REQUIRED = frozenset({"instagram", "facebook"})
 
 
 class ScrapeError(Exception):
@@ -52,11 +56,13 @@ class ScrapeStats:
     comments_seen: int = 0
     comments_kept: int = 0
     comments_inserted: int = 0
+    posts_failed: int = 0  # the site would not open them
 
     def __str__(self) -> str:
+        failed = f", {self.posts_failed} failed to open" if self.posts_failed else ""
         return (
-            f"posts: {self.posts_seen} scraped, {self.posts_skipped} skipped (unchanged) | "
-            f"comments: {self.comments_seen} seen, {self.comments_kept} kept, "
+            f"posts: {self.posts_seen} scraped, {self.posts_skipped} skipped (unchanged)"
+            f"{failed} | comments: {self.comments_seen} seen, {self.comments_kept} kept, "
             f"{self.comments_inserted} new"
         )
 

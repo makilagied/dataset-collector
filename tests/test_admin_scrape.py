@@ -149,7 +149,7 @@ def test_scrape_job_fails_when_every_target_fails(
         ({"delay": "0.2"}, "delay+must+be"),
         ({"max_comments": "lots"}, "Numbers+only"),
         ({"since": "yesterday"}, "Since+must+be"),
-        ({"platform": "tiktok"}, "Unknown+platform"),
+        ({"platform": "myspace"}, "Unknown+platform"),
     ],
 )
 def test_scrape_form_validation(
@@ -215,3 +215,37 @@ def test_comments_page_marks_hit_words(client: TestClient, db: Session) -> None:
     html = client.get("/admin/comments").text
     assert 'wewe <mark title="hit word">malayq</mark>' in html
     assert "&lt;b&gt;wewe&lt;/b&gt; <mark" in html  # comment text stays escaped
+
+
+def test_tiktok_scrape_job(
+    client: TestClient,
+    db: Session,
+    fake_scrape: list[dict[str, Any]],
+) -> None:
+    html = client.get("/admin/scrape").text
+    assert "Log in to TikTok" in html and "Start TikTok scrape" in html
+    status, loc = post(
+        client,
+        "/admin/scrape",
+        platform="tiktok",
+        targets="@mama\nhttps://www.tiktok.com/@mama/video/7301234567890123456",
+        max_posts="5",
+        max_comments="100",
+        delay="4",
+        since="2026-02-01",
+    )
+    assert status == 303 and "kind=ok" in loc
+    call = fake_scrape[0]
+    assert call["platform"] == "tiktok" and str(call["options"].since) == "2026-02-01"
+    status, loc = post(
+        client,
+        "/admin/scrape",
+        platform="tiktok",
+        targets="not a user!",
+        max_posts="5",
+        max_comments="100",
+        delay="4",
+    )
+    assert status == 303 and "kind=error" in loc and "TikTok" in loc
+    ensure_account(db, "tiktok", "mama")
+    assert '<span class="chip">TikTok</span>' in client.get("/admin/scrape").text

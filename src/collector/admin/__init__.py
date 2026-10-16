@@ -46,6 +46,7 @@ from collector.pipeline.export import (
 from collector.pipeline.sample import HIT_THRESHOLD, SampleError, parse_mix, sample_batch
 from collector.pipeline.scoring import SCORERS
 from collector.pipeline.stats import collect_stats
+from collector.scrape.common import PLATFORM_LABELS, PLATFORM_NAMES, PLATFORMS
 
 PAGE_SIZE = 50
 # An optional id filter: links and forms send "account=" for "all", which means None.
@@ -390,7 +391,11 @@ def scrape_page(request: Request, db: Db, settings: SettingsDep) -> HTMLResponse
 
     counts = {a.account_id: a for a in collect_stats(db).accounts}
     sources = [
-        {"account": a, "stats": counts.get(a.id), "platform": a.ig_user_id.split(":")[1]}
+        {
+            "account": a,
+            "stats": counts.get(a.id),
+            "platform": PLATFORM_NAMES.get(a.ig_user_id.split(":")[1], "?"),
+        }
         for a in db.scalars(
             select(Account).where(Account.ig_user_id.startswith("scrape:")).order_by(Account.id)
         )
@@ -415,7 +420,7 @@ def scrape_login(db: Db, factory: Factory, form: Form) -> Response:
     from collector.scrape.run import unavailable_reason
 
     platform = form.get("platform", "")
-    if platform not in ("instagram", "facebook"):
+    if platform not in PLATFORMS:
         return back(form, "Unknown platform", "error", "/admin/scrape")
     if reason := unavailable_reason():
         return back(form, f"Can't open a browser here: {reason}", "error", "/admin/scrape")
@@ -425,13 +430,13 @@ def scrape_login(db: Db, factory: Factory, form: Form) -> Response:
     return back(
         form,
         f"A browser window will open on this computer (job #{job.id}): log in to "
-        f"{platform.title()} there. It closes by itself once you're in.",
+        f"{PLATFORM_LABELS[platform]} there. It closes by itself once you're in.",
     )
 
 
 @router.post("/scrape")
 def scrape_start(db: Db, factory: Factory, form: Form) -> Response:
-    from collector.scrape import facebook, instagram
+    from collector.scrape import facebook, instagram, tiktok
     from collector.scrape.common import ScrapeError
     from collector.scrape.run import unavailable_reason
 
@@ -439,7 +444,7 @@ def scrape_start(db: Db, factory: Factory, form: Form) -> Response:
         return back(form, msg, "error", "/admin/scrape")
 
     platform = form.get("platform", "")
-    if platform not in ("instagram", "facebook"):
+    if platform not in PLATFORMS:
         return error("Unknown platform")
     if reason := unavailable_reason():
         return error(f"Can't open a browser here: {reason}")
@@ -448,7 +453,11 @@ def scrape_start(db: Db, factory: Factory, form: Form) -> Response:
         return error("Add at least one target")
     if len(targets) > MAX_TARGETS:
         return error(f"At most {MAX_TARGETS} targets per run")
-    parse = instagram.parse_target if platform == "instagram" else facebook.parse_target
+    parse = {
+        "instagram": instagram.parse_target,
+        "facebook": facebook.parse_target,
+        "tiktok": tiktok.parse_target,
+    }[platform]
     bad = []
     for t in targets:
         try:
@@ -456,7 +465,7 @@ def scrape_start(db: Db, factory: Factory, form: Form) -> Response:
         except ScrapeError:
             bad.append(t)
     if bad:
-        return error(f"Not a valid {platform.title()} target: {', '.join(bad)}")
+        return error(f"Not a valid {PLATFORM_LABELS[platform]} target: {', '.join(bad)}")
 
     params: dict[str, Any] = {"platform": platform, "targets": targets}
     try:
@@ -468,7 +477,7 @@ def scrape_start(db: Db, factory: Factory, form: Form) -> Response:
     except ValueError:
         return error("Numbers only in the limits")
     since = form.get("since", "").strip()
-    if since and platform == "instagram":
+    if since and platform in ("instagram", "tiktok"):
         try:
             datetime.strptime(since, "%Y-%m-%d")
         except ValueError:
@@ -480,7 +489,7 @@ def scrape_start(db: Db, factory: Factory, form: Form) -> Response:
     for flag in ("refresh", "process"):
         if form.get(flag) == "1":
             params[flag] = True
-    label = f"{platform.title()} scrape of {len(targets)} target(s)"
+    label = f"{PLATFORM_LABELS[platform]} scrape of {len(targets)} target(s)"
     return _queue(db, factory, form, "scrape", params, label)
 
 

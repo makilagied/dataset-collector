@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_ui.html" import icon %}
 {% set title = "Scrape" %}
+{% set names = {"instagram": "Instagram", "facebook": "Facebook", "tiktok": "TikTok"} %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -15,21 +16,22 @@
 <div class="panel">
   <h2><span class="step">1</span>Log in</h2>
   <div class="grid-2" style="gap: 12px">
-    {% for platform in ["instagram", "facebook"] %}
+    {% for platform in ["instagram", "facebook", "tiktok"] %}
     {% set s = logins[platform] %}
     <div class="card" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
       <div>
-        <div style="font-weight: 650">{{ platform|title }}</div>
+        <div style="font-weight: 650">{{ names[platform] }}</div>
         <div class="small">
-          {% if s is none %}<span class="pill">not checked yet</span>
+          {% if s is none %}<span class="pill">not checked yet</span>{% if platform == "tiktok" %} <span class="muted">login optional</span>{% endif %}
           {% elif s.ok %}<span class="pill status-done">logged in</span> <span class="muted">checked {{ s.at[:16]|replace("T", " ") }} UTC</span>
+          {% elif platform == "tiktok" %}<span class="pill">not logged in</span> <span class="muted">optional</span>
           {% else %}<span class="pill status-failed">not logged in</span> <span class="muted">checked {{ s.at[:16]|replace("T", " ") }} UTC</span>{% endif %}
         </div>
       </div>
       <form class="inline" method="post" action="/admin/scrape/login">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/scrape">
         <input type="hidden" name="platform" value="{{ platform }}">
-        <button {% if unavailable %}disabled{% endif %}>Log in to {{ platform|title }}</button>
+        <button {% if unavailable %}disabled{% endif %}>Log in to {{ names[platform] }}</button>
       </form>
     </div>
     {% endfor %}
@@ -39,9 +41,10 @@
 <div class="grid-2">
 {% for platform, hint in [
     ("instagram", "@username, #hashtag or post link, one per line"),
-    ("facebook", "Page, group or post link, one per line")] %}
+    ("facebook", "Page, group or post link, one per line"),
+    ("tiktok", "@username, #hashtag or video link, one per line")] %}
 <div class="panel">
-  <h2><span class="step">2</span>Scrape {{ platform|title }}</h2>
+  <h2><span class="step">2</span>Scrape {{ names[platform] }}</h2>
   <form method="post" action="/admin/scrape">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/scrape">
     <input type="hidden" name="platform" value="{{ platform }}">
@@ -50,7 +53,7 @@
       <label>Posts per target<input type="number" name="max_posts" min="1" max="500" value="20"></label>
       <label>Comments per post<input type="number" name="max_comments" min="1" max="100000" value="5000"></label>
       <label>Seconds between requests<input type="number" name="delay" min="1" max="60" step="0.5" value="4"></label>
-      {% if platform == "instagram" %}<label>Only posts since (optional)<input type="date" name="since"></label>{% endif %}
+      {% if platform in ("instagram", "tiktok") %}<label>Only posts since (optional)<input type="date" name="since"></label>{% endif %}
       <label>Category (optional)<input name="category" placeholder="udaku, football…" list="categories"></label>
     </div>
     <div class="row" style="margin-top: 14px; gap: 18px">
@@ -58,7 +61,7 @@
       <label class="check"><input type="checkbox" name="process" value="1" checked> Process new comments when finished</label>
     </div>
     <hr class="divider">
-    <button class="primary" {% if unavailable %}disabled{% endif %}>Start {{ platform|title }} scrape</button>
+    <button class="primary" {% if unavailable %}disabled{% endif %}>Start {{ names[platform] }} scrape</button>
   </form>
 </div>
 {% endfor %}
@@ -75,7 +78,7 @@
     {% for j in recent_jobs %}
     <tr>
       <td class="id">{{ j.id }}</td>
-      <td class="nowrap">{{ "login" if j.kind == "scrape_login" else "scrape" }} · {{ (j.params or {}).get("platform", "")|title }}</td>
+      <td class="nowrap">{{ "login" if j.kind == "scrape_login" else "scrape" }} · {{ names.get((j.params or {}).get("platform", ""), "") }}</td>
       <td>{% for t in (j.params or {}).get("targets", []) %}<span class="chip">{{ t }}</span>{% endfor %}</td>
       <td><span class="pill status-{{ j.status }}">{{ j.status }}</span></td>
       <td class="nowrap">{{ j.started_at|dt }}</td>
@@ -94,7 +97,7 @@
     {% for r in sources %}{% set a = r.account %}{% set s = r.stats %}
     <tr>
       <td><strong>{{ a.username }}</strong></td>
-      <td><span class="chip">{{ "Instagram" if r.platform == "ig" else "Facebook" }}</span></td>
+      <td><span class="chip">{{ r.platform }}</span></td>
       <td>{{ a.category or "—" }}</td>
       <td class="num">{{ s.media if s else 0 }}</td>
       <td class="num">{{ s.comments if s else 0 }}</td>

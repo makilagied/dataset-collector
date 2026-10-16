@@ -6,7 +6,7 @@ obfuscated forms (`M.J.1.N.G.@`, `mjiiinga`, `мjіngа`, `mjnga`). It then expo
 stratified, anonymized sample for human labelling.
 
 - Two sources: the official API for consenting accounts, and an optional browser scraper
-  for public Instagram and Facebook comments (see [Scraping](#scraping-public-comments)).
+  for public Instagram, Facebook and TikTok comments (see [Scraping](#scraping-public-comments)).
 - Commenter usernames and IDs are never stored. They are HMAC-hashed at ingestion.
 - Access tokens are encrypted at rest. Secrets come only from environment variables.
 
@@ -139,9 +139,10 @@ With a local install, run `collector <command>` instead.
 | `export --batch NAME [--format csv\|jsonl] [--out PATH]` | Write the batch with mentions, URLs and emails masked |
 | `stats` | Per-account counts, abuse-hit rate, language split, exclusions, batches |
 | `demo load` / `demo remove` | Synthetic demo account (no Meta app needed) |
-| `scrape login instagram\|facebook` | Log in by hand in a browser window; the session is kept |
+| `scrape login instagram\|facebook\|tiktok` | Log in by hand in a browser window; the session is kept |
 | `scrape instagram TARGET...` | Scrape comments from `@user`, `#tag` or post URLs |
 | `scrape facebook TARGET...` | Scrape comments from page / group URLs or post URLs |
+| `scrape tiktok TARGET...` | Scrape comments from `@user`, `#tag` or video URLs |
 
 Web endpoints:
 
@@ -241,20 +242,26 @@ secret. Its webhooks are signed with it, and both payload shapes are accepted.
 
 ## Scraping public comments
 
-`collector scrape` reads public comments from Instagram and Facebook through a real,
+`collector scrape` reads public comments from Instagram, Facebook and TikTok through a real,
 logged-in Chromium window. No Meta app or account-owner consent is involved. Scraped
-sources become accounts named `scrape:ig:<name>` or `scrape:fb:<name>`, and their comments
+sources become accounts named `scrape:ig:<name>`, `scrape:fb:<name>` or `scrape:tt:<name>`,
+and their comments
 have `source = 'scrape'`. From there they go through `process` → `sample` → `export`
 like any other comments. Commenter IDs are HMAC-hashed and never stored.
 
 **Before you use it, know that:**
-- Scraping, especially while logged in, breaks Instagram's and Facebook's Terms of Use.
+- Scraping, especially while logged in, breaks Instagram's, Facebook's and TikTok's Terms
+  of Use.
   The account you log in with can be checkpointed or banned. Use a separate account,
   not your personal one.
 - The scraper depends on undocumented site internals and button labels. Expect to fix
   it when the sites change. All site-specific code is in
-  [src/collector/scrape/instagram.py](src/collector/scrape/instagram.py) and
-  [src/collector/scrape/facebook.py](src/collector/scrape/facebook.py).
+  [src/collector/scrape/instagram.py](src/collector/scrape/instagram.py),
+  [src/collector/scrape/facebook.py](src/collector/scrape/facebook.py) and
+  [src/collector/scrape/tiktok.py](src/collector/scrape/tiktok.py) (TikTok's page handling
+  is `TikTokSite` in [browser.py](src/collector/scrape/browser.py)).
+- TikTok shows captchas to automated browsers. When one appears, solve it in the browser
+  window; the scrape waits up to three minutes, then stops and keeps what it has.
 - Scraped data has no consent behind it. Check with your ethics board how it may be used
   and shared before you publish anything built from it.
 
@@ -266,14 +273,15 @@ pip install -e ".[scrape]"
 python -m playwright install chromium
 collector scrape login instagram     # log in in the window; it closes by itself
 collector scrape login facebook      # set the account's Facebook language to English
+collector scrape login tiktok         # optional: TikTok works logged out too
 ```
 
 The session is saved in `.scrape-profile/` (git-ignored). It holds live logins, so don't
 share it.
 
 **From the dashboard.** Run `collector ui` on the host and open
-<http://127.0.0.1:8001/admin/scrape>. The Scrape page logs in, starts Instagram or Facebook
-scrapes (same options as the commands below, plus "process new comments when finished"),
+<http://127.0.0.1:8001/admin/scrape>. The Scrape page logs in, starts Instagram, Facebook
+or TikTok scrapes (same options as the commands below, plus "process new comments when finished"),
 shows progress, and lists the scraped sources. Scrapes run as background jobs one at a
 time, so a long scrape holds back other jobs until it ends. The Docker dashboard on port
 8000 shows the same page but can't open a browser, so it only tells you to use `collector ui`.
@@ -290,6 +298,10 @@ collector scrape instagram https://www.instagram.com/p/SHORTCODE/
 # a Facebook page's recent posts, or one post
 collector scrape facebook https://www.facebook.com/somepage --max-posts 10
 collector scrape facebook https://www.facebook.com/somepage/posts/pfbid0...
+# a TikTok profile's newest videos since a date, a hashtag, or one video
+collector scrape tiktok @someprofile --since 2026-09-01
+collector scrape tiktok "#udaku" --max-posts 10
+collector scrape tiktok https://www.tiktok.com/@someprofile/video/7301234567890123456
 ```
 
 **Only hits are stored**, from every source: scraping, API backfill and webhooks

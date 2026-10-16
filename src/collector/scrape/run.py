@@ -1,5 +1,6 @@
 """Run scrapes and browser logins. Shared by the CLI and the admin UI's background jobs."""
 
+import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -13,6 +14,7 @@ from collector.config import get_settings
 from collector.ig.backfill import _get_state, _set_state
 from collector.scrape.browser import (
     LOGIN_URLS,
+    TikTokSite,
     first_page,
     instagram_fetch,
     instagram_post_lister,
@@ -20,6 +22,7 @@ from collector.scrape.browser import (
     open_browser,
 )
 from collector.scrape.common import (
+    LOGIN_REQUIRED,
     PLATFORMS,
     BlockedError,
     Pacer,
@@ -28,13 +31,14 @@ from collector.scrape.common import (
 )
 
 LOGIN_TIMEOUT = 300.0  # seconds a login window waits for you
+log = logging.getLogger(__name__)
 
 
 @dataclass
 class ScrapeOptions:
     max_posts: int = 20
     max_comments: int = 5000
-    since: date | None = None  # Instagram only
+    since: date | None = None  # Instagram and TikTok
     category: str | None = None
     delay: float = 4.0
     refresh: bool = False
@@ -117,6 +121,7 @@ def run_scrape(
 ) -> ScrapeRun:
     from collector.scrape.facebook import FacebookScraper
     from collector.scrape.instagram import InstagramScraper
+    from collector.scrape.tiktok import TikTokScraper
 
     if platform not in PLATFORMS:
         raise ScrapeError(f"platform must be one of {', '.join(PLATFORMS)}")
@@ -125,12 +130,24 @@ def run_scrape(
     with open_browser(profile_dir()) as context:
         ok = logged_in(context, platform)
         record_login(session, platform, ok)
-        if not ok:
+        if not ok and platform in LOGIN_REQUIRED:
             run.blocked = f"not logged in to {platform}; log in first"
             return run
         page = first_page(context)
-        scraper: InstagramScraper | FacebookScraper
-        if platform == "instagram":
+        scraper: InstagramScraper | FacebookScraper | TikTokScraper
+        if platform == "tiktok":
+            scraper = TikTokScraper(
+                session,
+                TikTokSite(page, pacer),
+                pacer,
+                max_posts=options.max_posts,
+                max_comments=options.max_comments,
+                since=options.since,
+                category=options.category,
+                refresh=options.refresh,
+                progress=progress,
+            )
+        elif platform == "instagram":
             scraper = InstagramScraper(
                 session,
                 instagram_fetch(page),
@@ -165,4 +182,9 @@ def run_scrape(
             except ScrapeError as e:
                 session.rollback()
                 run.results.append(TargetResult(target, error=f"skipped: {e}"))
+            except Exception as e:  # a browser error must not lose the other targets
+                log.exception("scraping %s failed", target)
+                session.rollback()
+                first = str(e).splitlines()[0] if str(e) else type(e).__name__
+                run.results.append(TargetResult(target, error=f"skipped: {first}"))
     return run

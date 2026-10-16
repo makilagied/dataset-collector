@@ -362,13 +362,13 @@ Refresh = Annotated[bool, typer.Option(help="Rescrape posts already scraped")]
 
 @scrape_app.command("login")
 def scrape_login(
-    platform: Annotated[str, typer.Argument(help="instagram or facebook")],
+    platform: Annotated[str, typer.Argument(help="instagram, facebook or tiktok")],
 ) -> None:
     """Open a browser window to log in by hand. The session is kept for later scrapes."""
     from collector.scrape.run import LOGIN_TIMEOUT, wait_for_login
 
-    if platform not in ("instagram", "facebook"):
-        typer.echo("platform must be instagram or facebook", err=True)
+    if platform not in ("instagram", "facebook", "tiktok"):
+        typer.echo("platform must be instagram, facebook or tiktok", err=True)
         raise typer.Exit(1)
     typer.echo(
         f"Log in in the browser window. It closes by itself once you are in "
@@ -448,6 +448,34 @@ def scrape_facebook(
         refresh=refresh,
     )
     _run_scrape("facebook", targets, options)
+
+
+@scrape_app.command("tiktok")
+def scrape_tiktok(
+    targets: Targets,
+    max_posts: MaxPosts = 20,
+    max_comments: MaxComments = 5000,
+    since: Annotated[
+        datetime | None, typer.Option(formats=["%Y-%m-%d"], help="Only videos on/after")
+    ] = None,
+    category: Category = None,
+    delay: Delay = 4.0,
+    refresh: Refresh = False,
+) -> None:
+    """Scrape comments from @users, #hashtags or video URLs. No login needed (log in
+    with `scrape login tiktok` if TikTok starts asking). Keep the browser window visible:
+    if TikTok shows a captcha, solve it there and the scrape carries on."""
+    from collector.scrape.run import ScrapeOptions
+
+    options = ScrapeOptions(
+        max_posts=max_posts,
+        max_comments=max_comments,
+        since=since.date() if since else None,
+        category=category,
+        delay=delay,
+        refresh=refresh,
+    )
+    _run_scrape("tiktok", targets, options)
 
 
 @app.command()
