@@ -4,8 +4,9 @@ trim_long_comments: a long comment with a hit word keeps only the excerpt around
 features are dropped so the next `process` run redoes them on the excerpt. A long comment
 with no hit word is deleted.
 
-prune_non_hits: with STORE_ONLY_HITS, delete comments that are no longer lexicon hits,
-e.g. after a word was added to the allowlist ("mninga").
+prune_non_hits: with STORE_ONLY_HITS (or always=True, the admin UI's button), delete
+comments that are not lexicon hits, e.g. after a word was added to the allowlist ("mninga")
+or after a scrape that stored everything.
 """
 
 from dataclasses import dataclass
@@ -72,9 +73,9 @@ class PruneStats:
     occurrences: int = 0  # including the repeats folded into them
 
 
-def prune_non_hits(session: Session, *, dry_run: bool = False) -> PruneStats:
+def prune_non_hits(session: Session, *, dry_run: bool = False, always: bool = False) -> PruneStats:
     stats = PruneStats()
-    if not get_settings().store_only_hits:
+    if not always and not get_settings().store_only_hits:
         return stats
     gone = [
         (cid, n)

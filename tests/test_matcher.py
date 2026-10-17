@@ -253,3 +253,83 @@ def test_mamae_is_a_hit(text: str) -> None:
 @pytest.mark.parametrize("text", ["mama", "mamake", "mama yako", "mamaye"])
 def test_plain_mother_words_are_not_mamae(text: str) -> None:
     assert not hit(text)
+
+
+# Words from abusive comments reviewed 2026-10-17.
+@pytest.mark.parametrize(
+    "text",
+    [
+        "namnyonya",
+        "nikunyonyee",
+        "kunyonywa",
+        "anakulamba",
+        "anawakula",
+        "wanajibaka",
+        "najibaka",
+        "bakwa",
+        "tako",
+        "titi",
+        "punyeto",
+        "nyeto",
+        "nakojoa",
+        "kudadeki",
+        "ananyege",
+        "Mfileeee",
+        "Kisimiii",
+        "Visimi",
+        "mdinya",
+        "Unanidinyaaa",
+        "nililiwa",
+        "mbunye",
+        "umbwaaa",
+        "mxiewww",
+        "Mxiuuuuuu",
+        "modofokoooo",
+        "mbupuz",
+        "qmmk",
+        "qmmke",
+        "mishahawa",
+        "kakuinamisha",
+        "tmbwa",
+        "unanikaza",
+        "kumchapa",
+        "Mbususu",
+        "nikilombe",
+        "kulombwa",
+        "nikizibue",
+        "nyash",
+        "wanakulana",
+        "unani harmonaiz",
+        "chuchuuu wewe",
+        "wewe kiharage",
+        "umala….utakua",
+        "umalaya",
+        "jitombea",
+        "kutomba2",
+        "mjinga2",
+        "kamalaya",
+    ],
+)
+def test_reviewed_abusive_words(text: str) -> None:
+    assert hit(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "kibaka amekamatwa",
+        "tabaka la kati",
+        "kuna mabaka usoni",
+        "kaza buti kaka",
+        "kuzibua sinki",
+        "kula chakula",
+        "kiharage na wali",
+        "Chuchu Hans amependeza",
+        "shahada ya kwanza",
+        "kisima cha maji",
+        "harmonize ametoa wimbo",
+        "Kilamba",
+    ],
+)
+def test_reviewed_words_spare_innocent_uses(text: str) -> None:
+    assert not hit(text)

@@ -256,9 +256,7 @@ class TikTokScraper:
             handle, videos = author_name(opened) or "videos", iter([opened])
 
         account = ensure_account(self.session, "tiktok", handle, self.category)
-        store = Store(
-            self.session, account, stats, self.refresh, self.progress, self.only_hits
-        )
+        store = Store(self.session, account, stats, self.refresh, self.progress, self.only_hits)
         failures = 0
         for n, video in enumerate(videos):
             if n >= self.max_posts:

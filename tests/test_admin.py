@@ -3,7 +3,7 @@ from collections.abc import Iterator
 import pytest
 import respx
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from collector.admin import csrf_token, jobs
@@ -15,6 +15,7 @@ from collector.models import Account, Comment, CommentFeatures, Job, Media, Samp
 from collector.nlp.langid import HeuristicDetector
 from collector.pipeline.process import process
 from collector.security import encrypt_token
+from collector.storage_filter import is_hit
 from tests.fake_graph import FakeGraph
 
 AUTH = ("admin", "pw-123")
@@ -307,6 +308,22 @@ def test_process_job_and_duplicate_guard(client: TestClient, db: Session) -> Non
     db.commit()
     status, location = post(client, "/admin/process")
     assert "already" in location and "kind=warn" in location
+
+
+def test_prune_job(client: TestClient, db: Session) -> None:
+    load_demo(db)
+    total = db.scalar(select(func.count()).select_from(Comment))
+    post(client, "/admin/prune", dry_run="1")
+    job = db.scalars(select(Job).order_by(Job.id.desc())).first()
+    assert job is not None and job.status == "done" and "would be deleted" in (job.result or "")
+    assert db.scalar(select(func.count()).select_from(Comment)) == total
+
+    status, location = post(client, "/admin/prune")
+    assert "kind=error" in location  # not confirmed
+
+    post(client, "/admin/prune", confirm="1")
+    texts = list(db.scalars(select(Comment.text_raw)))
+    assert 0 < len(texts) < total and all(is_hit(t or "") for t in texts)
 
 
 def test_refresh_tokens_job(client: TestClient, db: Session) -> None:

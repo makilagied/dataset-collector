@@ -15,6 +15,10 @@ tokens:
   kwann: kwanini
   sjui: sijui
   "2": tu
+  kmmk: kumamako
+  qmmk: kumamako
+  kmmke: kumamake
+  qmmke: kumamake
 
 # Ordered regex substitutions inside tokens that contain at least one letter
 # (so plain numbers such as "2026" are left alone).

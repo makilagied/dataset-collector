@@ -275,6 +275,21 @@ def run_process(db: Db, factory: Factory, form: Form) -> Response:
     )
 
 
+@router.post("/prune")
+def prune(db: Db, factory: Factory, form: Form) -> Response:
+    dry_run = form.get("dry_run") == "1"
+    if not dry_run and form.get("confirm") != "1":
+        return back(form, "Tick the box to confirm the deletion", "error")
+    return _queue(
+        db,
+        factory,
+        form,
+        "prune",
+        {"dry_run": dry_run},
+        "Counting comments without hit words" if dry_run else "Removing comments without hit words",
+    )
+
+
 @router.post("/tokens/refresh")
 def refresh_tokens(db: Db, factory: Factory, form: Form) -> Response:
     return _queue(db, factory, form, "refresh_tokens", {"days": 10}, "Token refresh")

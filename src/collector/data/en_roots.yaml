@@ -24,6 +24,10 @@ roots:
   - {root: shit, prefixes: ["", dip, bull], suffixes: ["", s, ty, head, face, hole, bag],
      severity: medium, context_dependent: true,
      notes: "an expletive on its own; abusive when aimed at someone (you shit, u shitty)"}
+  - {root: fvc, suffixes: ["", k, ks, ked, ker, king, kin], severity: medium,
+     context_dependent: false, notes: "fuck spelled with v (fvc, fvck)"}
+  - {root: tit, suffixes: ["", s, ties], severity: medium, context_dependent: false,
+     notes: "vulgar (breast)"}
   - {root: bitch, suffixes: ["", es, y, ass], severity: medium, context_dependent: false}
   - {root: bastard, suffixes: ["", s], severity: medium, context_dependent: false}
   - {root: asshole, suffixes: ["", s], severity: medium, context_dependent: false}

@@ -26,6 +26,9 @@ JUNK = r"[^\sa-z]{0,2}"
 VERB_PREFIX = r"[a-z]{0,10}"
 # Endings that replace a verb's final "a": subjunctive, passive, reciprocal, stative.
 VERB_ENDINGS = ("a", "e", "wa", "we", "ana", "ewa", "eka")
+# "2" is shorthand for "tu" (just/only) and is often glued on: "kutomba2" normalizes to
+# "kutombatu". Swahili roots may carry it.
+TU_TAIL = "(?:tu)?"
 
 
 class LexiconError(ValueError):
@@ -92,13 +95,17 @@ def _affix(affixes: tuple[str, ...], before: bool) -> str:
 
 
 def build_pattern(
-    root: str, prefixes: tuple[str, ...], suffixes: tuple[str, ...] = ("",), verb: bool = False
+    root: str,
+    prefixes: tuple[str, ...],
+    suffixes: tuple[str, ...] = ("",),
+    verb: bool = False,
+    tail: str = "",
 ) -> re.Pattern[str]:
-    """Prefix + root + suffix; letters may repeat and carry junk between them."""
+    """Prefix + root + suffix (+ tail); letters may repeat and carry junk between them."""
     body = JUNK.join(f"{re.escape(ch)}+" for ch in root)
     prefix = VERB_PREFIX if verb else _affix(prefixes, before=True)
     suffix = _affix(suffixes, before=False)
-    return re.compile(rf"(?<![a-z]){prefix}{body}{suffix}(?![a-z])")
+    return re.compile(rf"(?<![a-z]){prefix}{body}{suffix}{tail}(?![a-z])")
 
 
 def _parse_root(entry: Any, index: int, lang: str, defaults: dict[str, Any]) -> Root:
@@ -129,7 +136,7 @@ def _parse_root(entry: Any, index: int, lang: str, defaults: dict[str, Any]) -> 
         severity=severity,
         context_dependent=bool(entry.get("context_dependent", False)),
         notes=str(entry.get("notes") or ""),
-        pattern=build_pattern(stem, prefixes, suffixes, verb),
+        pattern=build_pattern(stem, prefixes, suffixes, verb, TU_TAIL if lang == "sw" else ""),
         suffixes=suffixes,
         lang=lang,
         # Typo matching scores prefix + root + suffix; verbs have open-ended prefixes.

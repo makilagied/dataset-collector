@@ -44,6 +44,20 @@
         <button>Refresh expiring tokens</button>
       </form>
     </div>
+    <h2 style="margin-top: 18px">Remove comments without hit words</h2>
+    <p class="small muted">Deletes every stored comment that no longer matches a keyword, with its features, samples and duplicates. This can't be undone.</p>
+    <div class="actions-row">
+      <form class="inline" method="post" action="/admin/prune">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin">
+        <input type="hidden" name="dry_run" value="1">
+        <button>Count first</button>
+      </form>
+      <form class="inline" method="post" action="/admin/prune">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin">
+        <label class="check"><input type="checkbox" name="confirm" value="1" required> I understand</label>
+        <button class="danger">Remove them</button>
+      </form>
+    </div>
   </div>
   <div class="panel">
     <h2>Languages</h2>

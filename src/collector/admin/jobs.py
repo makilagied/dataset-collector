@@ -70,6 +70,18 @@ def _process(session: Session, params: dict[str, Any]) -> str:
     return f"{stats.processed} processed, {stats.hits} hits, excluded: {excluded}"
 
 
+def _prune(session: Session, params: dict[str, Any]) -> str:
+    from collector.pipeline.trim import prune_non_hits
+
+    dry_run = bool(params.get("dry_run"))
+    stats = prune_non_hits(session, dry_run=dry_run, always=True)
+    verb = "would be" if dry_run else "were"
+    return (
+        f"{stats.deleted} comments without hit words {verb} deleted"
+        f" ({stats.occurrences} with their repeats)"
+    )
+
+
 def _refresh_tokens(session: Session, params: dict[str, Any]) -> str:
     days = int(params.get("days", 10))
     with httpx.Client(timeout=30) as http:
@@ -147,6 +159,7 @@ def _subscribe(session: Session, params: dict[str, Any]) -> str:
 HANDLERS: dict[str, Callable[[Session, dict[str, Any]], str]] = {
     "backfill": _backfill,
     "process": _process,
+    "prune": _prune,
     "refresh_tokens": _refresh_tokens,
     "subscribe_webhooks": _subscribe,
     "scrape_login": _scrape_login,

@@ -36,7 +36,7 @@ roots:
      notes: "vagrant / good-for-nothing"}
   - {root: shamba, prefixes: [m, wa], severity: low, context_dependent: false,
      notes: "'bumpkin' (mshamba); bare 'shamba' = farm, so no bare match"}
-  - {root: malaya, prefixes: ["", u], severity: high, context_dependent: false,
+  - {root: malaya, prefixes: ["", u, ka, kama], severity: high, context_dependent: false,
      notes: "prostitute (slur)"}
   - {root: kahaba, prefixes: ["", ma, u], severity: high, context_dependent: false,
      notes: "prostitute (slur)"}
@@ -53,8 +53,8 @@ roots:
      notes: "insult at someone's mother (MAMAEE). No typo matching: 'mama', 'mamake' are innocent"}
   - {root: kundu, prefixes: [m, mi], severity: high, context_dependent: false,
      notes: "vulgar (anus) - mkundu"}
-  - {root: tako, prefixes: [ma], severity: medium, context_dependent: false,
-     notes: "vulgar (buttocks) - matako"}
+  - {root: tako, prefixes: ["", ma], severity: medium, context_dependent: false,
+     notes: "vulgar (buttocks) - tako, matako"}
   - {root: mavi, prefixes: [""], severity: medium, context_dependent: false,
      notes: "excrement"}
   - {root: nyesi, prefixes: [ki, vi], severity: medium, context_dependent: false,
@@ -79,8 +79,9 @@ roots:
      notes: "rubbish"}
 
   # Vulgar verbs (added 2026-10-15).
-  - {root: tomba, verb: true, severity: high, context_dependent: false,
-     notes: "vulgar: to fuck (kutomba, nitakutomba, tombwa)"}
+  - {root: tomba, verb: true, suffixes: [a, e, wa, we, ana, ewa, eka, ea, ee, eana],
+     severity: high, context_dependent: false,
+     notes: "vulgar: to fuck (kutomba, nitakutomba, tombwa, jitombea)"}
   - {root: fira, verb: true, suffixes: [a, wa, ana, ewa], severity: high,
      context_dependent: false,
      notes: "vulgar: to sodomise (kufira, firwa). No -e ending: 'fire' is English"}
@@ -90,6 +91,96 @@ roots:
   - {root: gonga, verb: true, severity: medium, context_dependent: true,
      notes: "slang: to have sex with; usually 'hit / knock' (gonga mlango, amegongwa na
        gari), so only a hit next to a 2nd-person cue"}
+
+  # From abusive comments reviewed 2026-10-17.
+  # Sexual verbs. Verbs match after any prefix chain, so innocent words ending in the
+  # same letters go in the allowlist (kibaka, tabaka).
+  - {root: nyonya, verb: true, suffixes: [a, e, wa, we, ana, ewa, eka, ea, ee],
+     severity: medium, context_dependent: false,
+     notes: "sexual: to suck (namnyonya, nikunyonyee, kunyonywa). Also breastfeed /
+       exploit (wanatunyonya), so expect some false hits"}
+  - {root: lamba, verb: true, severity: medium, context_dependent: false,
+     notes: "sexual: to lick (anakulamba). Also plain 'lick'"}
+  - {root: lomba, verb: true, severity: high, context_dependent: false,
+     notes: "slang: to have sex with (nikilombe, kulombwa)"}
+  - {root: dinya, verb: true, severity: high, context_dependent: false,
+     notes: "slang: to have sex with (mdinya, unanidinya)"}
+  - {root: baka, verb: true, suffixes: [a, wa, ana, ewa], severity: high,
+     context_dependent: false,
+     notes: "to rape (bakwa, wanajibaka, najibaka). No -e ending: 'bake' is English;
+       bare 'baka' (spot) and kibaka (thief) are allowlisted"}
+  - {root: kojoa, verb: true, severity: medium, context_dependent: false,
+     notes: "to urinate (nakojoa)"}
+  # Sexual verbs whose plain meaning is everyday Swahili: only the forms seen in abusive
+  # comments, with an object marker (ku = you, m = him/her, ni = me).
+  - {root: kula, prefixes: [anawa, anaku, amewa, ameku, nitawa, nitaku, atawa, ataku],
+     severity: medium, context_dependent: false, fuzzy: false,
+     notes: "slang: 'eat' = have sex with (anawakula). Bare kula is allowlisted"}
+  - {root: kulana, prefixes: ["", wana, wame, wata, mna, tuna], severity: medium,
+     context_dependent: false, fuzzy: false, notes: "slang: having sex (wanakulana)"}
+  - {root: liwa, prefixes: [nili, nime, ume, ame, uta, ata, nita], severity: medium,
+     context_dependent: false, fuzzy: false,
+     notes: "slang: was 'eaten' = had sex (nililiwa). Also 'ameliwa na simba'"}
+  - {root: inamisha, prefixes: [kaku, ameku, aliku, ataku, nitaku, nimeku, wameku, wataku],
+     suffixes: ["", wa], severity: medium, context_dependent: false, fuzzy: false,
+     notes: "bent you over (kakuinamisha). kuinamisha kichwa = bow the head, so only with ku"}
+  - {root: kaza, prefixes: [unani, anani, nitaku, nimeku, ataku, ameku], severity: medium,
+     context_dependent: false, fuzzy: false,
+     notes: "slang: have sex with (unanikaza). 'kaza buti' = work hard, so object needed"}
+  - {root: chapa, prefixes: [kum, nitaku, nitam, nimeku, nimem, ameku, amem],
+     severity: medium, context_dependent: false, fuzzy: false,
+     notes: "slang: have sex with / beat (kumchapa). Also 'kumchapa viboko' = cane him"}
+  - {root: zibu, prefixes: [niki, niku, nitaku, nitam, nim, ameku, amem],
+     suffixes: [a, e, liwa], severity: high, context_dependent: false, fuzzy: false,
+     notes: "slang: deflower (nikizibue). kuzibua = unblock, so object needed"}
+  - {root: fil, prefixes: [m, nim, niku, aku, am, waku, wam], suffixes: [e], severity: high,
+     context_dependent: false, fuzzy: false,
+     notes: "subjunctive of fila (Mfileeee); the fila verb has no -e ending ('file')"}
+  - {root: tmbwa, prefixes: [""], severity: high, context_dependent: false,
+     notes: "tombwa with the vowel dropped"}
+  - {root: harmonaiz, prefixes: ["", unani], suffixes: ["", e], severity: medium,
+     context_dependent: true, fuzzy: false,
+     notes: "sexual euphemism (unani harmonaiz). Also the singer, so only next to a cue"}
+
+  # Sexual nouns and words.
+  - {root: titi, prefixes: ["", ma], severity: medium, context_dependent: false,
+     notes: "vulgar (breast)"}
+  - {root: nyeto, prefixes: ["", pu, ma], severity: high, context_dependent: false,
+     notes: "masturbation (punyeto, nyeto)"}
+  - {root: nyege, prefixes: ["", ana, una, nina, wana, ma], severity: high,
+     context_dependent: false, notes: "horny / lust (ananyege)"}
+  - {root: dadeki, prefixes: ["", ku], severity: medium, context_dependent: false,
+     notes: "vulgar exclamation (kudadeki)"}
+  - {root: simi, prefixes: [ki, vi], severity: high, context_dependent: false, fuzzy: false,
+     notes: "vulgar (clitoris) - kisimi, visimi. No typo matching: kisima = well"}
+  - {root: chuchu, prefixes: ["", ma], severity: medium, context_dependent: true,
+     notes: "nipple. Also the actress Chuchu Hans, so only next to a 2nd-person cue"}
+  - {root: harage, prefixes: [ki], severity: medium, context_dependent: true,
+     notes: "slang (clitoris); kiharage / maharage = bean, so only next to a cue"}
+  - {root: mbunye, prefixes: [""], severity: high, context_dependent: false,
+     notes: "vulgar (genitals)"}
+  - {root: bususu, prefixes: ["", m], severity: high, context_dependent: false,
+     notes: "vulgar (genitals) - mbususu"}
+  - {root: mbupu, prefixes: [""], suffixes: ["", z], severity: medium,
+     context_dependent: false, notes: "vulgar slang (mbupu, mbupuz)"}
+  - {root: shahawa, prefixes: ["", m, mi], severity: medium, context_dependent: false,
+     fuzzy: false, notes: "semen (mishahawa). No typo matching: shahada = certificate"}
+  - {root: nyash, prefixes: [""], suffixes: ["", i], severity: medium,
+     context_dependent: false, notes: "buttocks (sheng)"}
+  - {root: modofoko, prefixes: [""], severity: high, context_dependent: false,
+     notes: "motherfucker, Swahili spelling"}
+  - {root: madafaka, prefixes: [""], severity: high, context_dependent: false,
+     notes: "motherfucker, Swahili spelling"}
+
+  # Insults and contempt.
+  - {root: mala, prefixes: [u], severity: high, context_dependent: false, fuzzy: false,
+     notes: "umalaya cut short (umala). Bare 'mala' not matched"}
+  - {root: mbwa, prefixes: [u], severity: medium, context_dependent: false, fuzzy: false,
+     notes: "'u mbwa' (you are a dog) written as one word: umbwa"}
+  - {root: msiu, prefixes: [""], severity: medium, context_dependent: false, fuzzy: false,
+     notes: "teeth-suck of contempt (Mxiuuuu; x becomes s in normalization)"}
+  - {root: msiew, prefixes: [""], severity: medium, context_dependent: false, fuzzy: false,
+     notes: "teeth-suck of contempt (mxiewww)"}
 
 # Innocent words that collide with roots (by fuzzy or skeleton matching). Never matched.
 allowlist:
@@ -140,6 +231,15 @@ allowlist:
   - kugongana
   - yamegongana
   - wamegongana
+  - baka        # spot / patch (baka verb)
+  - mabaka
+  - kibaka      # pickpocket
+  - vibaka
+  - tabaka      # layer / social class
+  - matabaka
+  - malombe     # surname (lomba)
+  - kilamba     # place name (lamba)
+  - shahada     # certificate / degree
 
 # Words that point an insult at the reader. A context_dependent root counts as a hit only
 # when one of these is within two tokens of it.

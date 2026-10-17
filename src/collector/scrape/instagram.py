@@ -199,9 +199,7 @@ class InstagramScraper:
             handle, posts = owner, iter([post])
 
         account = ensure_account(self.session, "instagram", handle, self.category)
-        store = Store(
-            self.session, account, stats, self.refresh, self.progress, self.only_hits
-        )
+        store = Store(self.session, account, stats, self.refresh, self.progress, self.only_hits)
         for n, m in enumerate(posts):
             if n >= self.max_posts:
                 break
