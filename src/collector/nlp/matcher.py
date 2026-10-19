@@ -14,6 +14,12 @@ Allowlisted words never match. @mentions and URLs are skipped. Context-dependent
 
 English roots (lang "en") are matched against `text_plain`, the text normalized without
 Swahili shorthand, because shorthand rewrites English spellings ("fuck" -> "fusik").
+
+4. masked   - a letter hidden behind a symbol ("c*ck", "f@ck", "anaf**rana"), found in
+              `text_masked` (normalize_masked), where each hidden letter is a "?". Only for
+              roots not already found, and with few hidden letters per root.
+
+`match_text(raw)` normalizes a raw comment into all three views and matches it.
 """
 
 import re
@@ -21,13 +27,18 @@ from dataclasses import dataclass, field
 
 from rapidfuzz.distance import OSA, Levenshtein
 
-from collector.nlp.lexicon import VOWELS, Lexicon, Root, load_lexicon, skeleton
-from collector.nlp.normalize import is_protected
+from collector.nlp.lexicon import MASK, VOWELS, Lexicon, Root, load_lexicon, skeleton
+from collector.nlp.normalize import is_protected, normalize, normalize_masked, normalize_plain
 
-METHOD_CONFIDENCE = {"regex": 1.0, "skeleton": 0.9, "fuzzy": 0.8}
+METHOD_CONFIDENCE = {"regex": 1.0, "skeleton": 0.9, "fuzzy": 0.8, "masked": 0.9}
 UNCUED_CONTEXT_FACTOR = 0.5  # context-dependent root with no 2nd-person cue nearby
 CUE_WINDOW = 2
 _LETTERS = re.compile(r"[a-z]+")
+
+
+def max_masks(root: Root) -> int:
+    """Hidden letters a root may have: one, or one per four letters of a long stem."""
+    return max(1, len(root.stem) // 4)
 
 
 def max_edits(length: int) -> int:
@@ -174,8 +185,57 @@ def _words(tokens: list[str]) -> list[list[str]]:
     return [[] if is_protected(t) else _LETTERS.findall(t) for t in tokens]
 
 
+def _cue_positions(lex: Lexicon, words_per_token: list[list[str]]) -> set[int]:
+    return {i for i, words in enumerate(words_per_token) if any(lex.is_cue(w) for w in words)}
+
+
+def _new_match(root: Root, method: str, text: str, i: int, cues: set[int]) -> Match:
+    cued = any(abs(i - j) <= CUE_WINDOW for j in cues if j != i)
+    score = root.weight * METHOD_CONFIDENCE[method]
+    if root.context_dependent and not cued:
+        score *= UNCUED_CONTEXT_FACTOR
+    return Match(
+        root=root.root,
+        method=method,
+        token=text,
+        token_index=i,
+        severity=root.severity,
+        context_dependent=root.context_dependent,
+        cued=cued,
+        score=round(score, 3),
+    )
+
+
+def _match_masked(lex: Lexicon, text_masked: str, result: MatchResult) -> None:
+    """Add roots found only with hidden letters. Token indices are the masked view's."""
+    found = {m.root for m in result.matches}
+    tokens = text_masked.split()
+    cues = _cue_positions(lex, _words(tokens))
+    for i, token in enumerate(tokens):
+        if MASK not in token or is_protected(token):
+            continue
+        for root in lex.roots:
+            if root.root in found or root.masked_pattern is None:
+                continue
+            m = root.masked_pattern.search(token)
+            if m is None or not 0 < m.group(0).count(MASK) <= max_masks(root):
+                continue
+            found.add(root.root)
+            result.matches.append(_new_match(root, "masked", m.group(0), i, cues))
+
+
+def match_text(raw: str, lexicon: Lexicon | None = None) -> MatchResult:
+    """Match a raw comment in all its normalized views."""
+    return match(
+        normalize(raw), lexicon, text_plain=normalize_plain(raw), text_masked=normalize_masked(raw)
+    )
+
+
 def match(
-    text_norm: str, lexicon: Lexicon | None = None, text_plain: str | None = None
+    text_norm: str,
+    lexicon: Lexicon | None = None,
+    text_plain: str | None = None,
+    text_masked: str | None = None,
 ) -> MatchResult:
     lex = lexicon or load_lexicon()
     tokens = text_norm.split()
@@ -183,12 +243,7 @@ def match(
     if len(plain) != len(tokens):  # shorthand never splits tokens; be safe anyway
         plain = tokens
     views = {"sw": (tokens, _words(tokens)), "en": (plain, _words(plain))}
-    cue_positions = {
-        i
-        for _, words_per_token in views.values()
-        for i, words in enumerate(words_per_token)
-        if any(lex.is_cue(w) for w in words)
-    }
+    cue_positions = set().union(*(_cue_positions(lex, w) for _, w in views.values()))
 
     result = MatchResult()
     for i in range(len(tokens)):
@@ -202,20 +257,7 @@ def match(
             if found is None:
                 continue
             method, text = found
-            cued = any(abs(i - j) <= CUE_WINDOW for j in cue_positions if j != i)
-            score = root.weight * METHOD_CONFIDENCE[method]
-            if root.context_dependent and not cued:
-                score *= UNCUED_CONTEXT_FACTOR
-            result.matches.append(
-                Match(
-                    root=root.root,
-                    method=method,
-                    token=text,
-                    token_index=i,
-                    severity=root.severity,
-                    context_dependent=root.context_dependent,
-                    cued=cued,
-                    score=round(score, 3),
-                )
-            )
+            result.matches.append(_new_match(root, method, text, i, cue_positions))
+    if text_masked is not None:
+        _match_masked(lex, text_masked, result)
     return result

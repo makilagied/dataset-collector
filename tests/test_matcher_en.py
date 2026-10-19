@@ -25,6 +25,7 @@ def hit(raw: str) -> bool:
         "dumbass",
         "you dog",
         "u shit",
+        "shit happens",  # listed as abusive on its own in the "Abusive Words" sheet
         "you ugly",
         "you nigga",
         "kys",
@@ -42,7 +43,6 @@ def test_english_abuse_is_found(raw: str) -> None:
         "Dickens cocktail cockpit",
         "my dog is cute",  # animal words need a 2nd-person cue
         "nice goat skin",
-        "shit happens",
         "ugly dress",
         "my nigga",
         "sexy",

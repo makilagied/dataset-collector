@@ -29,6 +29,8 @@ VERB_ENDINGS = ("a", "e", "wa", "we", "ana", "ewa", "eka")
 # "2" is shorthand for "tu" (just/only) and is often glued on: "kutomba2" normalizes to
 # "kutombatu". Swahili roots may carry it.
 TU_TAIL = "(?:tu)?"
+# In masked text (normalize_masked) "?" marks a letter hidden behind * # % @ ("c*ck").
+MASK = "?"
 
 
 class LexiconError(ValueError):
@@ -51,6 +53,7 @@ class Root:
     lang: str = "sw"
     fuzzy: bool = True  # allow typo (Levenshtein) matches
     verb: bool = False
+    masked_pattern: re.Pattern[str] | None = None  # pattern, with hidden letters allowed
 
     @property
     def stem(self) -> str:
@@ -100,9 +103,12 @@ def build_pattern(
     suffixes: tuple[str, ...] = ("",),
     verb: bool = False,
     tail: str = "",
+    masked: bool = False,
 ) -> re.Pattern[str]:
-    """Prefix + root + suffix (+ tail); letters may repeat and carry junk between them."""
-    body = JUNK.join(f"{re.escape(ch)}+" for ch in root)
+    """Prefix + root + suffix (+ tail); letters may repeat and carry junk between them.
+    With `masked`, any letter of the root may also be a hidden one ("?")."""
+    hidden = f"|{re.escape(MASK)}" if masked else ""
+    body = JUNK.join(f"(?:{re.escape(ch)}+{hidden})" for ch in root)
     prefix = VERB_PREFIX if verb else _affix(prefixes, before=True)
     suffix = _affix(suffixes, before=False)
     return re.compile(rf"(?<![a-z]){prefix}{body}{suffix}{tail}(?![a-z])")
@@ -126,17 +132,23 @@ def _parse_root(entry: Any, index: int, lang: str, defaults: dict[str, Any]) -> 
             raise LexiconError(f"roots[{index}]: a verb takes any prefix; drop 'prefixes'")
         if not root.endswith("a") or len(root) < 3:
             raise LexiconError(f"roots[{index}]: verb {root!r} must end in 'a' (tomba)")
+    for key in ("prefixes", "suffixes"):
+        if any(not isinstance(a, str) for a in entry.get(key) or []):
+            # YAML reads bare off / on / yes / no as booleans: quote them ("off").
+            raise LexiconError(f"roots[{index}] ({root}): every {key[:-2]} must be quoted text")
     prefixes = tuple(str(p).lower() for p in entry.get("prefixes") or [""])
     default_suffixes = VERB_ENDINGS if verb else [""]
     suffixes = tuple(str(s).lower() for s in entry.get("suffixes") or default_suffixes)
     stem = root[:-1] if verb else root
+    tail = TU_TAIL if lang == "sw" else ""
     return Root(
         root=root,
         prefixes=prefixes,
         severity=severity,
         context_dependent=bool(entry.get("context_dependent", False)),
         notes=str(entry.get("notes") or ""),
-        pattern=build_pattern(stem, prefixes, suffixes, verb, TU_TAIL if lang == "sw" else ""),
+        pattern=build_pattern(stem, prefixes, suffixes, verb, tail),
+        masked_pattern=build_pattern(stem, prefixes, suffixes, verb, tail, masked=True),
         suffixes=suffixes,
         lang=lang,
         # Typo matching scores prefix + root + suffix; verbs have open-ended prefixes.

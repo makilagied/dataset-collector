@@ -4,7 +4,7 @@ import pytest
 import yaml
 
 from collector.nlp import lexicon as lx
-from collector.nlp.matcher import keyboard_adjacent, match, max_edits, typo_like
+from collector.nlp.matcher import keyboard_adjacent, match, match_text, max_edits, typo_like
 from collector.nlp.normalize import normalize
 from tests.conftest import REPORT
 
@@ -333,3 +333,122 @@ def test_reviewed_abusive_words(text: str) -> None:
 )
 def test_reviewed_words_spare_innocent_uses(text: str) -> None:
     assert not hit(text)
+
+
+def hit_text(raw: str) -> bool:
+    return match_text(raw).is_hit
+
+
+# Words and spellings from the "Abusive Words" spreadsheet (2026-10-19).
+@pytest.mark.parametrize(
+    "text",
+    [
+        "amelarwa",
+        "anafirika",
+        "kafirwe",
+        "kajifire",
+        "kakifirishe",
+        "firaneni",
+        "anatomwa",
+        "kajitombeshe",
+        "katombane",
+        "Tombaneni",
+        "kitombi",
+        "mtombo",
+        "katiwe",
+        "Unatiwa",
+        "Basha",
+        "Bwabwa",
+        "choko",
+        "Khanithi",
+        "kumanyoko",
+        "kumambichi",
+        "mbolo",
+        "mboo",
+        "uboo",
+        "mbwajike",
+        "mfiro",
+        "nyoko",
+        "Pumbafu",
+        "Shwaini",
+        "Shenzi",
+        "Kinembe",
+        "Changudoa",
+        "Dada poa",
+        "Mwendawazimu",
+        "arsehole",
+        "prick",
+        "bollocks",
+        "shit",
+        "bullshit",
+        "pussies",
+        "piss off",
+        "punani",
+        "Minge",
+        "cock sucker",
+        "you ass",
+        "you cock",
+    ],
+)
+def test_sheet_words(text: str) -> None:
+    assert hit_text(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "anaf**rana",
+        "anat#mbana",
+        "kaf**rike",
+        "Kish##nzi",
+        "kis*nge",
+        "Shwa*ni",
+        "mb*o",
+        "uch*",
+        "kum@@nyoko",
+        "kajif@re",
+        "f@ck",
+        "c@nt",
+        "d%ck",
+        "p%ssy",
+        "pr**ck",
+        "ars**hole",
+        "bullsh**t",
+        "boll@cks",
+        "pun*ni",
+        "M*nge",
+    ],
+)
+def test_hidden_letters(text: str) -> None:
+    assert hit_text(text)
+    assert match_text(text).hits[0].method in ("masked", "regex", "skeleton")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Mwanamke atiwa mbaroni",
+        "kutiwa mbaroni",
+        "nyoka mkubwa",
+        "nimechoka sana",
+        "fire on the pitch",
+        "he scored 2 balls",
+        "I am a sucker for love",
+        "door knob",
+        "damn that goal",
+        "Clara",
+        "a*b test",
+        "10*20",
+        "haha*",
+        "uchumi",
+        "boo",
+    ],
+)
+def test_sheet_words_spare_innocent_uses(text: str) -> None:
+    assert not hit_text(text)
+
+
+def test_quoted_affixes_required() -> None:
+    raw = {"roots": [{"root": "piss", "severity": "low", "suffixes": ["", False]}]}
+    with pytest.raises(lx.LexiconError, match="quoted"):
+        lx.parse_lexicon(raw)

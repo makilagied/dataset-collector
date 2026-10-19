@@ -18,8 +18,7 @@ from typing import Any
 
 from collector.config import get_settings
 from collector.nlp.highlight import hit_spans
-from collector.nlp.matcher import MatchResult, match
-from collector.nlp.normalize import normalize, normalize_plain
+from collector.nlp.matcher import MatchResult, match_text
 from collector.pipeline.sample import HIT_THRESHOLD
 
 MAX_TEXT = 200
@@ -28,7 +27,7 @@ _WORD = re.compile(r"\S+")
 
 
 def _strong_hits(text: str) -> MatchResult:
-    result = match(normalize(text), text_plain=normalize_plain(text))
+    result = match_text(text)
     return MatchResult([m for m in result.hits if m.score >= HIT_THRESHOLD])
 
 

@@ -1,0 +1,11 @@
+# Abusive terms written as two or more words. Normalization joins each into one token
+# ("dada poa" -> "dadapoa") so the joined form can be a root in sw_roots.yaml or
+# en_roots.yaml. Lowercase; any whitespace between the words matches.
+
+phrases:
+  - dada poa          # prostitute (euphemism)
+  - mwenda wazimu     # madman
+  - cock sucker
+  - cock suckers
+  - piss off
+  - pissed off

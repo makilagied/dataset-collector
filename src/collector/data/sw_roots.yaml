@@ -20,9 +20,9 @@
 roots:
   - {root: jinga, prefixes: [m, wa, u, ki, ma], severity: medium, context_dependent: false,
      notes: "fool / foolishness (mjinga, wajinga, ujinga)"}
-  - {root: pumbavu, prefixes: [m, wa, u, ki], severity: medium, context_dependent: false,
+  - {root: pumbavu, prefixes: ["", m, wa, u, ki], severity: medium, context_dependent: false,
      notes: "idiot (mpumbavu, upumbavu)"}
-  - {root: shenzi, prefixes: [m, wa, u, ki], severity: medium, context_dependent: false,
+  - {root: shenzi, prefixes: ["", m, wa, u, ki], severity: medium, context_dependent: false,
      notes: "savage / uncivilised (mshenzi, ushenzi)"}
   - {root: bwege, prefixes: ["", ma], severity: medium, context_dependent: false,
      notes: "fool"}
@@ -40,12 +40,13 @@ roots:
      notes: "prostitute (slur)"}
   - {root: kahaba, prefixes: ["", ma, u], severity: high, context_dependent: false,
      notes: "prostitute (slur)"}
-  - {root: senge, prefixes: [m, wa, u], severity: high, context_dependent: false,
+  - {root: senge, prefixes: [m, wa, u, ki], severity: high, context_dependent: false,
      notes: "homophobic slur"}
   - {root: shoga, prefixes: ["", ma, u], severity: high, context_dependent: true,
      notes: "homophobic slur; on the coast also 'female friend'"}
-  - {root: kuma, prefixes: [""], severity: high, context_dependent: false,
-     notes: "vulgar (genitals)"}
+  - {root: kuma, prefixes: [""], suffixes: ["", mbichi, ndizi, nina, nyoko], severity: high,
+     context_dependent: false,
+     notes: "vulgar (genitals); kumanyoko, kumanina, kumambichi, kumandizi"}
   - {root: kumama, prefixes: [""], suffixes: [ko, ke, yako, yake, ye, enu], severity: high,
      context_dependent: false,
      notes: "vulgar insult directed at someone's mother (kumamako, kumamake: his/her mother's)"}
@@ -79,13 +80,17 @@ roots:
      notes: "rubbish"}
 
   # Vulgar verbs (added 2026-10-15).
-  - {root: tomba, verb: true, suffixes: [a, e, wa, we, ana, ewa, eka, ea, ee, eana],
+  - {root: tomba, verb: true,
+     suffixes: [a, e, wa, we, ana, ane, aneni, eni, ewa, eka, eke, ea, ee, eana, esha, eshe],
      severity: high, context_dependent: false,
-     notes: "vulgar: to fuck (kutomba, nitakutomba, tombwa, jitombea)"}
-  - {root: fira, verb: true, suffixes: [a, wa, ana, ewa], severity: high,
+     notes: "vulgar: to fuck (kutomba, tombwa, jitombea, kajitombeshe, Tombaneni)"}
+  - {root: fira, verb: true,
+     suffixes: [a, wa, we, ana, ane, aneni, ewa, ika, ike, isha, ishe], severity: high,
      context_dependent: false,
-     notes: "vulgar: to sodomise (kufira, firwa). No -e ending: 'fire' is English"}
-  - {root: fila, verb: true, suffixes: [a, wa, ana, ewa], severity: high,
+     notes: "vulgar: to sodomise (kufira, kafirwe, anafirika, kakifirishe, firaneni).
+       No -e ending: 'fire' is English (see the 'fire' entry)"}
+  - {root: fila, verb: true,
+     suffixes: [a, wa, we, ana, ane, aneni, ewa, ika, ike, isha, ishe], severity: high,
      context_dependent: false,
      notes: "l/r spelling of fira (kufila, filwa). No -e ending: 'file' is English"}
   - {root: gonga, verb: true, severity: medium, context_dependent: true,
@@ -171,6 +176,60 @@ roots:
      notes: "motherfucker, Swahili spelling"}
   - {root: madafaka, prefixes: [""], severity: high, context_dependent: false,
      notes: "motherfucker, Swahili spelling"}
+
+  # From the "Abusive Words" spreadsheet (2026-10-19).
+  - {root: fire, prefixes: [kaji, aji, uji, niji, waji, niku, aku, waku, ka, m, am, nim],
+     severity: high, context_dependent: false, fuzzy: false,
+     notes: "subjunctive of fira with a prefix (kajifire); bare 'fire' is English"}
+  - {root: lara, verb: true, suffixes: [wa, we, ewa], severity: high,
+     context_dependent: false,
+     notes: "to be sodomised (amelarwa). No -a ending: Clara, Lara"}
+  - {root: tomwa, prefixes: ["", ana, ame, ali, ata, una, ume, uli, uta, ku, nime, nita,
+     wana, wame], severity: high, context_dependent: false, fuzzy: false,
+     notes: "tombwa without the b (anatomwa)"}
+  - {root: tombi, prefixes: [ki, vi], severity: high, context_dependent: false,
+     fuzzy: false, notes: "kitombi"}
+  - {root: tombo, prefixes: [m, mi], severity: high, context_dependent: false,
+     fuzzy: false, notes: "mtombo"}
+  - {root: tiwa, prefixes: [una, ume, uta, nime, nita, wana], severity: medium,
+     context_dependent: false, fuzzy: false,
+     notes: "slang: be penetrated (unatiwa). Not ametiwa / atiwa / kutiwa: 'atiwa
+       mbaroni' = arrested"}
+  - {root: tiwe, prefixes: [ka, u, ni, wa], severity: medium, context_dependent: false,
+     fuzzy: false, notes: "katiwe"}
+  - {root: tiana, prefixes: [ku, wana, wame, mna, tuna], severity: medium,
+     context_dependent: false, fuzzy: false,
+     notes: "slang: have sex (kutiana). Also 'kutiana moyo' = encourage each other"}
+  - {root: basha, prefixes: ["", ma], severity: high, context_dependent: false, fuzzy: false,
+     notes: "homophobic slur (the active partner); also a surname"}
+  - {root: bwabwa, prefixes: ["", ma], severity: high, context_dependent: false,
+     fuzzy: false, notes: "homophobic slur (effeminate man)"}
+  - {root: choko, prefixes: ["", ma], severity: high, context_dependent: false, fuzzy: false,
+     notes: "homophobic slur (the passive partner)"}
+  - {root: khanithi, prefixes: ["", ma], severity: high, context_dependent: false,
+     notes: "homophobic slur (effeminate man)"}
+  - {root: mbolo, prefixes: [""], severity: high, context_dependent: false, fuzzy: false,
+     notes: "vulgar (penis)"}
+  - {root: boo, prefixes: [m, u], severity: high, context_dependent: false, fuzzy: false,
+     notes: "vulgar (penis) - mboo, uboo; bare 'boo' is English"}
+  - {root: mbwajike, prefixes: [""], severity: high, context_dependent: false,
+     notes: "female dog = bitch"}
+  - {root: firo, prefixes: [m, wa], severity: high, context_dependent: false, fuzzy: false,
+     notes: "sodomite (mfiro)"}
+  - {root: nyoko, prefixes: [""], severity: high, context_dependent: false, fuzzy: false,
+     notes: "insult at someone's mother (kumanyoko); nyoka = snake"}
+  - {root: uchi, prefixes: [""], severity: medium, context_dependent: false, fuzzy: false,
+     notes: "nakedness / genitals"}
+  - {root: shwaini, prefixes: [""], severity: medium, context_dependent: false,
+     notes: "insult (devil / bastard)"}
+  - {root: kinembe, prefixes: ["", vi], severity: high, context_dependent: false,
+     notes: "vulgar (clitoris)"}
+  - {root: changudoa, prefixes: ["", ma], severity: high, context_dependent: false,
+     notes: "prostitute (slang)"}
+  - {root: dadapoa, prefixes: ["", ma], severity: high, context_dependent: false,
+     fuzzy: false, notes: "prostitute (euphemism); 'dada poa' is joined by phrases.yaml"}
+  - {root: mwendawazimu, prefixes: ["", wa], severity: medium, context_dependent: false,
+     notes: "madman; 'mwenda wazimu' is joined by phrases.yaml (wendawazimu = plural)"}
 
   # Insults and contempt.
   - {root: mala, prefixes: [u], severity: high, context_dependent: false, fuzzy: false,

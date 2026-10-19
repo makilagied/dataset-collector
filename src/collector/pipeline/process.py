@@ -19,7 +19,7 @@ from collector.nlp import langid
 from collector.nlp.highlight import hit_terms
 from collector.nlp.lexicon import Lexicon, load_lexicon
 from collector.nlp.matcher import match
-from collector.nlp.normalize import is_protected, normalize, normalize_plain
+from collector.nlp.normalize import is_protected, normalize, normalize_masked, normalize_plain
 from collector.pipeline.hitwords import CountDelta, apply_counts
 
 # Bump when normalizer, lexicon or matcher behaviour changes to reprocess everything.
@@ -131,7 +131,7 @@ def process(
                 if norm in seen_in_batch or earlier.get(norm, cid) < cid:
                     reason = "duplicate"
                 seen_in_batch.add(norm)
-            result = match(norm, lex, normalize_plain(raw or ""))
+            result = match(norm, lex, normalize_plain(raw or ""), normalize_masked(raw or ""))
             lang = det.detect(raw or "")
             terms = hit_terms(raw or "", result)
             counts.change(old_words, old_roots, terms, old_weight or 1, weight)

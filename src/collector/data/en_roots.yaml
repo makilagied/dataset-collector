@@ -21,13 +21,34 @@ roots:
   - {root: fuck, prefixes: ["", mother, motha, mutha], severity: medium,
      suffixes: ["", s, ed, er, ers, ing, in, face, head, tard, boy, wit],
      context_dependent: false, notes: "also motherfucker"}
-  - {root: shit, prefixes: ["", dip, bull], suffixes: ["", s, ty, head, face, hole, bag],
-     severity: medium, context_dependent: true,
-     notes: "an expletive on its own; abusive when aimed at someone (you shit, u shitty)"}
+  - {root: shit, prefixes: ["", dip, bull], suffixes: ["", s, ty, head, face, hole, holes, bag],
+     severity: medium, context_dependent: false,
+     notes: "listed as abusive in the 'Abusive Words' sheet, so a hit on its own"}
   - {root: fvc, suffixes: ["", k, ks, ked, ker, king, kin], severity: medium,
      context_dependent: false, notes: "fuck spelled with v (fvc, fvck)"}
   - {root: tit, suffixes: ["", s, ties], severity: medium, context_dependent: false,
      notes: "vulgar (breast)"}
+  - {root: arse, suffixes: ["", s, hole, holes], severity: medium, context_dependent: false}
+  - {root: ass, suffixes: ["", es], severity: medium, context_dependent: true,
+     notes: "bare ass / asses: a hit only when aimed (you ass); see also dumbass etc."}
+  - {root: balls, severity: medium, context_dependent: true,
+     notes: "football comments use 'balls' innocently"}
+  - {root: prick, suffixes: ["", s], severity: medium, context_dependent: false}
+  - {root: sucker, suffixes: ["", s], severity: medium, context_dependent: true,
+     notes: "'a sucker for' is innocent"}
+  - {root: cocksucker, suffixes: ["", s], severity: high, context_dependent: false,
+     notes: "'cock sucker' is joined by phrases.yaml"}
+  - {root: cock, suffixes: ["", s], severity: medium, context_dependent: true,
+     notes: "bare cock / cocks (also rooster): a hit only when aimed"}
+  - {root: bollocks, severity: medium, context_dependent: false}
+  - {root: damn, suffixes: ["", ed, it], severity: medium, context_dependent: true,
+     notes: "mostly an exclamation; a hit when aimed (damn you)"}
+  - {root: piss, suffixes: ["", ed, es, ing, "off", edoff], severity: medium,
+     context_dependent: false, notes: "'piss off' / 'pissed off' are joined by phrases.yaml"}
+  - {root: punani, suffixes: ["", s], severity: high, context_dependent: false}
+  - {root: minge, suffixes: ["", s], severity: high, context_dependent: false}
+  - {root: knob, suffixes: ["", s, head, heads], severity: medium, context_dependent: true,
+     notes: "door knob: a hit only when aimed"}
   - {root: bitch, suffixes: ["", es, y, ass], severity: medium, context_dependent: false}
   - {root: bastard, suffixes: ["", s], severity: medium, context_dependent: false}
   - {root: asshole, suffixes: ["", s], severity: medium, context_dependent: false}
@@ -38,7 +59,8 @@ roots:
      context_dependent: false}
   - {root: cock, suffixes: [sucker, suckers, head], severity: high, context_dependent: false,
      notes: "bare 'cock' left out (rooster)"}
-  - {root: pussy, suffixes: [""], severity: medium, context_dependent: true}
+  - {root: pussy, suffixes: [""], severity: medium, context_dependent: false}
+  - {root: pussies, severity: medium, context_dependent: false}
   - {root: whore, suffixes: ["", s], severity: high, context_dependent: false}
   - {root: slut, suffixes: ["", s, ty], severity: high, context_dependent: false}
   - {root: prostitute, suffixes: ["", s], severity: high, context_dependent: false}

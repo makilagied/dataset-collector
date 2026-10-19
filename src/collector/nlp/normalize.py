@@ -8,7 +8,12 @@ Each step is a pure `str -> str` function; `normalize` runs them in order:
 4. leetspeak   - @->a 4->a 3->e 1->i !->i 0->o $->s 5->s 7->t, only next to letters
 5. collapse    - runs of 3+ identical letters -> 1 ("mjiiinga"); doubles are kept because
                  Swahili has real ones ("mzee", "saa"); repeated punctuation/emoji -> 1
-6. shorthand   - texting shorthand from sw_shorthand.yaml ("cjui" -> "sijui", "ww" -> "wewe")
+6. phrases     - two-word terms joined into one token ("dada poa" -> "dadapoa"), phrases.yaml
+7. shorthand   - texting shorthand from sw_shorthand.yaml ("cjui" -> "sijui", "ww" -> "wewe")
+
+normalize_masked is a third view for words with a letter hidden behind a symbol ("c*ck",
+"f@ck", "anaf**rana"): each run of * # % @ inside a word becomes one "?", which the matcher
+lets stand for one letter. The other views drop or decode those symbols instead.
 
 Separators run before leetspeak (the plan lists them the other way round): in
 "m j 1 n g a" the "1" only has letter neighbours once the letters are joined.
@@ -256,6 +261,39 @@ def shorthand(text: str, table: Shorthand | None = None) -> str:
     return _map_tokens(text, lambda t: _shorthand_token(t, table))
 
 
+# --- 6. phrases ---------------------------------------------------------------------
+
+
+@lru_cache
+def load_phrases() -> tuple[tuple[re.Pattern[str], str], ...]:
+    raw: dict[str, Any] = yaml.safe_load(
+        files("collector.data").joinpath("phrases.yaml").read_text(encoding="utf-8")
+    )
+    out = []
+    for phrase in raw.get("phrases") or []:
+        words = str(phrase).lower().split()
+        pattern = r"\s+".join(re.escape(w) for w in words)
+        out.append((re.compile(rf"(?<![a-z]){pattern}(?![a-z])"), "".join(words)))
+    return tuple(out)
+
+
+def phrases(text: str) -> str:
+    for pattern, joined in load_phrases():
+        text = pattern.sub(joined, text)
+    return text
+
+
+# --- masked view ---------------------------------------------------------------------
+
+MASK = "?"
+# Between two letters, or closing a word of 2+ letters ("uch*").
+_MASK_RUN = re.compile(r"(?<=[^\W\d_])[*#%@]+(?=[^\W\d_])|(?<=[^\W\d_]{2})[*#%]+$")
+
+
+def mask(text: str) -> str:
+    return _map_tokens(text, lambda t: _MASK_RUN.sub(MASK, t))
+
+
 # --- pipeline ------------------------------------------------------------------------
 
 STEPS: tuple[Callable[[str], str], ...] = (
@@ -264,8 +302,10 @@ STEPS: tuple[Callable[[str], str], ...] = (
     separators,
     leetspeak,
     collapse,
+    phrases,
     shorthand,
 )
+MASKED_STEPS = (fold, homoglyphs, mask, separators, leetspeak, collapse, phrases)
 
 
 def normalize(text: str) -> str:
@@ -277,5 +317,12 @@ def normalize(text: str) -> str:
 def normalize_plain(text: str) -> str:
     """Every step except Swahili shorthand: the form English words are matched in."""
     for step in STEPS[:-1]:
+        text = step(text)
+    return " ".join(text.split())
+
+
+def normalize_masked(text: str) -> str:
+    """Like normalize_plain, but letters hidden behind symbols are kept as "?"."""
+    for step in MASKED_STEPS:
         text = step(text)
     return " ".join(text.split())

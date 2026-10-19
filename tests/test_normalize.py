@@ -170,3 +170,13 @@ def test_not_protected(token: str) -> None:
 )
 def test_separators_join_disguised_words_but_not_whole_words(raw: str, expected: str) -> None:
     assert n.normalize(raw) == expected
+
+
+def test_masked_view_keeps_hidden_letters() -> None:
+    assert n.normalize_masked("anaf**rana c*ck f@ck uch*") == "anaf?rana c?ck f?ck uch?"
+    assert n.normalize_masked("@user a@b.com") == "@user a@b.com"
+
+
+def test_phrases_joined() -> None:
+    assert n.normalize("Dada  poa wewe") == "dadapoa wewe"
+    assert n.normalize_plain("piss off") == "pissoff"

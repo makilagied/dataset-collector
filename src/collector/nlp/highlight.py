@@ -11,8 +11,8 @@ is marked. Mentions and links are never marked.
 
 import re
 
-from collector.nlp.matcher import MatchResult, match
-from collector.nlp.normalize import is_protected, normalize, normalize_plain
+from collector.nlp.matcher import MatchResult, match_text
+from collector.nlp.normalize import is_protected, normalize, normalize_masked, normalize_plain
 
 MAX_RUN = 15  # tokens a spaced-out word may span ("m j i n g a" is 6)
 _LEET_CHARS = "@$*"  # stand-ins for letters ("m@l@y@", "f*ck"); "!" ends sentences
@@ -32,7 +32,8 @@ def _tokens(raw: str) -> list[tuple[int, int]]:
 
 def _contains(text: str, word: str) -> bool:
     pattern = rf"(?<![a-z]){re.escape(word)}(?![a-z])"
-    return any(re.search(pattern, form) for form in (normalize(text), normalize_plain(text)))
+    forms = (normalize(text), normalize_plain(text), normalize_masked(text))
+    return any(re.search(pattern, form) for form in forms)
 
 
 def _keep(ch: str) -> bool:
@@ -51,7 +52,7 @@ def _trim(raw: str, start: int, end: int) -> tuple[int, int]:
 def _hit_runs(raw: str, result: MatchResult | None) -> list[tuple[int, int, str]]:
     """(start, end, root) of each marked word, in text order."""
     if result is None:
-        result = match(normalize(raw), text_plain=normalize_plain(raw))
+        result = match_text(raw)
     roots: dict[str, str] = {}  # matched text -> root
     places: dict[str, set[int]] = {}  # matched text -> normalized token positions
     for m in result.hits:
