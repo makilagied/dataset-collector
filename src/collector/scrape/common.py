@@ -6,20 +6,25 @@ other account's. Commenter identities go through upsert_comment and are HMAC-has
 exactly as for the API backfill; raw platform payloads are never stored.
 """
 
+import logging
 import random
 import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from collector import net
 from collector.ig.backfill import upsert_comment, upsert_media
 from collector.models import Account, Media
 from collector.storage_filter import prepare
+
+log = logging.getLogger(__name__)
 
 SCRAPE_PREFIX = "scrape:"
 PLATFORMS = ("instagram", "facebook", "tiktok")
@@ -36,6 +41,10 @@ class ScrapeError(Exception):
 
 class BlockedError(ScrapeError):
     """The platform wants a login, a checkpoint, or is rate limiting. Stop the whole run."""
+
+
+class RateLimitedError(BlockedError):
+    """The platform is throttling us (HTTP 429): it goes away if we stop for a while."""
 
 
 def is_scraped(account: Account) -> bool:
@@ -68,15 +77,95 @@ class ScrapeStats:
 
 
 class Pacer:
-    """Randomized pause between requests, so a run looks like a person reading."""
+    """Randomized pause between requests, so a run looks like a person reading, and at most
+    `max_per_hour` requests in any rolling hour (0 = no cap)."""
 
-    def __init__(self, delay: float, sleep: Callable[[float], None] = time.sleep):
+    def __init__(
+        self,
+        delay: float,
+        sleep: Callable[[float], None] = time.sleep,
+        max_per_hour: int = 0,
+        clock: Callable[[], float] = time.monotonic,
+    ):
         self.delay = delay
         self.sleep = sleep
+        self.max_per_hour = max_per_hour
+        self.clock = clock
+        self._recent: deque[float] = deque()
 
     def wait(self, factor: float = 1.0) -> None:
         if self.delay > 0:
             self.sleep(random.uniform(0.5, 1.5) * self.delay * factor)
+        if not self.max_per_hour:
+            return
+        now = self.clock()
+        while self._recent and self._recent[0] <= now - 3600:
+            self._recent.popleft()
+        if len(self._recent) >= self.max_per_hour:
+            pause = self._recent[0] + 3600 - now
+            log.info("hourly request cap (%d) reached, pausing %.0fs", self.max_per_hour, pause)
+            net.notify(f"{self.max_per_hour} requests this hour: pausing {pause / 60:.0f} min")
+            self.sleep(pause)
+            self._recent.popleft()
+        self._recent.append(self.clock())
+
+
+# Pauses after a 429, longer each time it repeats; give up after this much waiting in a row.
+COOLDOWN_STEPS_S = (15 * 60, 30 * 60, 60 * 60, 120 * 60)
+COOLDOWN_MAX_S = 6 * 3600
+
+
+class Cooldown:
+    """Waits out a platform's rate limit instead of failing: on RateLimitedError pause (15,
+    30, 60, then every 120 minutes) and send the same request again, so the scrape carries
+    on where it stopped. Shared across jobs (see `cooldown_for`): the next job starts only
+    once a pause it inherited is over."""
+
+    def __init__(
+        self,
+        platform: str,
+        sleep: Callable[[float], None] = time.sleep,
+        clock: Callable[[], float] = time.monotonic,
+    ):
+        self.platform = platform
+        self.sleep = sleep
+        self.clock = clock
+        self.until = 0.0  # clock() time before which no request should be sent
+
+    def _pause(self, seconds: float, why: str) -> None:
+        resume = datetime.now() + timedelta(seconds=seconds)
+        log.warning("%s: %s; pausing until %s", self.platform, why, f"{resume:%H:%M}")
+        net.notify(f"{self.platform}: {why}. Pausing until {resume:%H:%M}, then carrying on…")
+        self.sleep(seconds)
+
+    def call[T](self, fn: Callable[[], T]) -> T:
+        left = self.until - self.clock()
+        if left > 0:
+            self._pause(left, "still rate limited from the last run")
+        waited, step = 0.0, 0
+        while True:
+            try:
+                result = fn()
+            except RateLimitedError:
+                if waited >= COOLDOWN_MAX_S:
+                    self.until = self.clock() + COOLDOWN_STEPS_S[-1]
+                    raise
+                pause = COOLDOWN_STEPS_S[min(step, len(COOLDOWN_STEPS_S) - 1)]
+                self.until = self.clock() + pause
+                step += 1
+                self._pause(pause, f"rate limited (HTTP 429, pause {step})")
+                waited += pause
+                continue
+            if step:
+                net.notify(f"{self.platform}: rate limit lifted, carrying on…")
+            return result
+
+
+_cooldowns: dict[str, Cooldown] = {}
+
+
+def cooldown_for(platform: str) -> Cooldown:
+    return _cooldowns.setdefault(platform, Cooldown(platform))
 
 
 def ensure_account(

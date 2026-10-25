@@ -21,6 +21,7 @@ from urllib.parse import parse_qs, urlparse
 
 from sqlalchemy.orm import Session
 
+from collector import net
 from collector.models import Media
 from collector.scrape.common import (
     BlockedError,
@@ -38,6 +39,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 BASE = "https://www.facebook.com"
+HOST = net.host_of(BASE)
 POST_URL = re.compile(
     r"https://(?:www|web|m)\.facebook\.com/(?:"
     r"[\w.\-]+/(?:posts|videos)/[\w.\-]+"
@@ -255,7 +257,7 @@ class FacebookScraper:
         return stats
 
     def _goto(self, url: str) -> None:
-        self.page.goto(url, wait_until="domcontentloaded")
+        net.call(lambda: self.page.goto(url, wait_until="domcontentloaded"), HOST)
         self.page.wait_for_timeout(3000)
         if any(s in self.page.url for s in ("/login", "/checkpoint")):
             raise BlockedError(f"Facebook sent us to {self.page.url}; log in again")
@@ -276,7 +278,9 @@ class FacebookScraper:
                 break
             idle = idle + 1 if len(found) == before else 0
             if idle >= 4:
-                break
+                if not net.wait_for_network(HOST):
+                    break
+                idle = 0  # the connection had dropped; keep scrolling now it's back
             self.page.mouse.wheel(0, 2500)
             self.pacer.wait(0.5)
         if not found:
@@ -310,7 +314,9 @@ class FacebookScraper:
                 break
             idle = 0 if clicked else idle + 1
             if idle >= 3:
-                break
+                if not net.wait_for_network(HOST):
+                    break
+                idle = 0  # the connection had dropped; keep reading now it's back
         store.finish(media)
         log.info("%s: %d comments", url, len(seen))
 

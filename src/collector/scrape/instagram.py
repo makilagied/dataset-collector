@@ -25,6 +25,7 @@ from collector.models import Media
 from collector.scrape.common import (
     BlockedError,
     Pacer,
+    RateLimitedError,
     ScrapeError,
     ScrapeStats,
     Store,
@@ -43,8 +44,8 @@ BLOCK_MESSAGES = (
     "checkpoint_required",
     "challenge_required",
     "feedback_required",
-    "please wait a few minutes",
 )
+RATE_LIMIT_MESSAGES = ("please wait a few minutes",)
 MAX_PAGES = 500  # hard stop for any one cursor loop
 
 Fetch = Callable[[str], dict[str, Any]]
@@ -95,7 +96,9 @@ def shortcode_to_pk(code: str) -> str:
 def check_response(status: int, body: str) -> dict[str, Any]:
     """Parse an endpoint response, raising BlockedError for login walls and rate limits."""
     lowered = body[:2000].lower()
-    if status == 429 or any(m in lowered for m in BLOCK_MESSAGES):
+    if status == 429 or any(m in lowered for m in RATE_LIMIT_MESSAGES):
+        raise RateLimitedError(f"Instagram rate limited the request (HTTP {status})")
+    if any(m in lowered for m in BLOCK_MESSAGES):
         raise BlockedError(f"Instagram blocked the request (HTTP {status}): {body[:200]!r}")
     if status in (401, 403):
         raise BlockedError(f"Instagram refused the request (HTTP {status}); log in again")

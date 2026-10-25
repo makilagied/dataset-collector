@@ -346,6 +346,42 @@ def test_unexpected_errors_are_recorded_and_redacted(
     assert "failed" in client.get("/admin/jobs").text
 
 
+def test_retry_failed_job(client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    load_demo(db)
+    calls: list[dict[str, object]] = []
+
+    def flaky(session: Session, params: dict[str, object]) -> str:
+        calls.append(params)
+        if len(calls) == 1:
+            raise jobs.JobError("temporary failure")
+        return "ok now"
+
+    monkeypatch.setitem(jobs.HANDLERS, "process", flaky)
+    post(client, "/admin/process", all="1")
+    failed = db.scalars(select(Job)).one()
+    assert failed.status == "failed"
+    assert f"/admin/jobs/{failed.id}/retry" in client.get("/admin/jobs").text
+
+    status, location = post(client, f"/admin/jobs/{failed.id}/retry")
+    assert status == 303 and location.startswith("/admin/jobs?") and "kind=ok" in location
+    old, new = db.scalars(select(Job).order_by(Job.id)).all()
+    db.refresh(old)
+    assert old.status == "failed"  # history kept
+    assert (new.kind, new.params, new.status, new.result) == (
+        "process",
+        {"all": True},
+        "done",
+        "ok now",
+    )
+    assert calls == [{"all": True}, {"all": True}]
+
+    # only failed / interrupted jobs can be retried
+    status, location = post(client, f"/admin/jobs/{new.id}/retry")
+    assert "kind=error" in location
+    assert "kind=error" in post(client, "/admin/jobs/999999/retry")[1]
+    assert f"/admin/jobs/{new.id}/retry" not in client.get("/admin/jobs").text
+
+
 def test_mark_interrupted(db: Session) -> None:
     db.add_all(
         [

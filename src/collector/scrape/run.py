@@ -127,7 +127,7 @@ def run_scrape(
     if platform not in PLATFORMS:
         raise ScrapeError(f"platform must be one of {', '.join(PLATFORMS)}")
     run = ScrapeRun()
-    pacer = Pacer(options.delay)
+    pacer = Pacer(options.delay, max_per_hour=get_settings().scrape_max_requests_per_hour)
     with open_browser(profile_dir()) as context:
         ok = logged_in(context, platform)
         record_login(session, platform, ok)

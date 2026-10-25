@@ -137,6 +137,7 @@ With a local install, run `collector <command>` instead.
 | `process [--batch-size 500] [--all]` | Normalize, match and language-ID new or outdated comments |
 | `sample --batch NAME --size N [--mix 50/30/20] [--seed N] [--lang sw]` | Draw a labelling batch: lexicon hits / model-flagged / random |
 | `export --batch NAME [--format csv\|jsonl] [--out PATH]` | Write the batch with mentions, URLs and emails masked |
+| `export-words [--format csv\|jsonl] [--q TEXT] [--out PATH]` | Write the hit words: each spelling and how many comments contain it |
 | `stats` | Per-account counts, abuse-hit rate, language split, exclusions, batches |
 | `demo load` / `demo remove` | Synthetic demo account (no Meta app needed) |
 | `scrape login instagram\|facebook\|tiktok` | Log in by hand in a browser window; the session is kept |
@@ -318,10 +319,12 @@ typos ("malayq"), because a free one-letter change is usually a different real w
 ("mabaya" is not "malaya"). Mistakes found in real comments are kept as regression tests in
 [reviewed_comments.yaml](tests/fixtures/reviewed_comments.yaml). The
 scraper waits about `--delay` seconds (default 4, randomized) between requests. A rerun
-skips posts whose comment count hasn't changed, unless you pass `--refresh`. If the site
-asks for a login or a checkpoint, or starts rate limiting, the run stops with exit code 2.
-Everything scraped so far is kept. Clear the challenge in the window (or with
-`scrape login`) and wait a while before you run it again.
+skips posts whose comment count hasn't changed, unless you pass `--refresh`. A run makes at
+most `SCRAPE_MAX_REQUESTS_PER_HOUR` requests (default 600) in any hour. If Instagram rate
+limits it anyway (HTTP 429), the run pauses for 15, 30, 60, then 120 minutes at a time and
+carries on where it stopped; it gives up after 6 hours of pauses in a row. If the site asks
+for a login or a checkpoint, the run stops with exit code 2. Everything scraped so far is
+kept. Clear the challenge in the window (or with `scrape login`) before you run it again.
 
 Limits: Instagram hashtag targets return only the posts the tag page shows (top and
 recent, a few dozen). Facebook posts carry no post date, so `--since` applies to

@@ -15,8 +15,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
+from collector import net
 from collector.scrape import instagram, tiktok
-from collector.scrape.common import BlockedError, Pacer, ScrapeError
+from collector.scrape.common import BlockedError, Pacer, ScrapeError, cooldown_for
 
 if TYPE_CHECKING:
     from playwright.sync_api import BrowserContext, Page, Response
@@ -34,6 +35,9 @@ SESSION_COOKIES = {
     "facebook": ("c_user", "facebook.com"),
     "tiktok": ("sessionid", "tiktok.com"),
 }
+
+IG_HOST = net.host_of(instagram.BASE)
+TT_HOST = net.host_of(tiktok.BASE)
 
 _FETCH_JS = """
 async ({url, appId}) => {
@@ -95,12 +99,16 @@ def logged_in(context: "BrowserContext", platform: str) -> bool:
 def instagram_fetch(page: "Page") -> instagram.Fetch:
     """A Fetch that runs inside the logged-in instagram.com page (same cookies, same origin)."""
     if not page.url.startswith(instagram.BASE):
-        page.goto(instagram.BASE + "/", wait_until="domcontentloaded")
+        net.call(lambda: page.goto(instagram.BASE + "/", wait_until="domcontentloaded"), IG_HOST)
 
-    def fetch(path: str) -> dict[str, Any]:
-        result = page.evaluate(_FETCH_JS, {"url": instagram.BASE + path, "appId": instagram.APP_ID})
+    def fetch_once(path: str) -> dict[str, Any]:
+        args = {"url": instagram.BASE + path, "appId": instagram.APP_ID}
+        result = net.call(lambda: page.evaluate(_FETCH_JS, args), IG_HOST)
         body = result["body"] if isinstance(result.get("body"), str) else json.dumps(result)
         return instagram.check_response(int(result["status"]), body)
+
+    def fetch(path: str) -> dict[str, Any]:
+        return cooldown_for("instagram").call(lambda: fetch_once(path))
 
     return fetch
 
@@ -127,7 +135,8 @@ def instagram_post_lister(
 
         page.on("response", on_response)
         try:
-            page.goto(f"{instagram.BASE}/{quote(username)}/", wait_until="domcontentloaded")
+            url = f"{instagram.BASE}/{quote(username)}/"
+            net.call(lambda: page.goto(url, wait_until="domcontentloaded"), IG_HOST)
             page.wait_for_timeout(4000)
             if any(s in page.url for s in ("/accounts/login", "/challenge")):
                 raise BlockedError(f"Instagram sent us to {page.url}; log in again")
@@ -145,8 +154,10 @@ def instagram_post_lister(
                 if enough(list(posts.values())):
                     break
                 idle = idle + 1 if len(posts) == before else 0
-                if idle >= 3:  # end of the grid (or nothing visible)
-                    break
+                if idle >= 3:
+                    if not net.wait_for_network(IG_HOST):
+                        break  # end of the grid (or nothing visible)
+                    idle = 0  # the connection had dropped; keep scrolling now it's back
                 page.mouse.wheel(0, 4000)
                 pacer.wait(0.6)
                 page.wait_for_timeout(1500)
@@ -243,7 +254,7 @@ class TikTokSite:
 
     def _goto(self, url: str) -> None:
         try:
-            self.page.goto(url, wait_until="domcontentloaded")
+            net.call(lambda: self.page.goto(url, wait_until="domcontentloaded"), TT_HOST)
         except Exception as e:  # TikTok answers bot-looking page loads with HTTP errors
             raise ScrapeError(f"TikTok refused to open {url} ({str(e).splitlines()[0]})") from e
         self.page.wait_for_timeout(3000)
@@ -382,8 +393,10 @@ class TikTokSite:
             if enough(list(videos.values())):
                 break
             idle = idle + 1 if len(videos) == before else 0
-            if idle >= 4:  # end of the grid
-                break
+            if idle >= 4:
+                if not net.wait_for_network(TT_HOST):
+                    break  # end of the grid
+                idle = 0  # the connection had dropped; keep scrolling now it's back
             self.page.mouse.wheel(0, 3000)
             self.pacer.wait(0.6)
             self.page.wait_for_timeout(1500)
@@ -435,7 +448,9 @@ class TikTokSite:
                 clicks += clicked
             idle = 0 if got or clicked else idle + 1
             if idle >= (4 if more else 2):
-                return
+                if not net.wait_for_network(TT_HOST):
+                    return
+                idle = 0  # the connection had dropped; keep reading now it's back
             self._scroll_comments()
             self.pacer.wait(0.5)
             self.page.wait_for_timeout(1200)

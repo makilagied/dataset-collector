@@ -11,6 +11,10 @@
     <button class="primary">Search</button>
     {% if q %}<a class="btn ghost" href="/admin/words">Reset</a>{% endif %}
   </form>
+  <div class="actions-row">
+    <a class="btn sm" href="{{ export_url('csv') }}">CSV</a>
+    <a class="btn sm" href="{{ export_url('jsonl') }}">JSONL</a>
+  </div>
 </div>
 
 <div class="panel flush">

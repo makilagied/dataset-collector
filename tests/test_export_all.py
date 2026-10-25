@@ -141,3 +141,57 @@ def test_admin_download(demo: Session, engine: Engine, monkeypatch: pytest.Monke
         assert client.get("/admin/comments/export?fmt=xlsx").status_code == 400
     finally:
         app.dependency_overrides.clear()
+
+
+def test_hit_words_export(demo: Session, tmp_path: Path) -> None:
+    from collector.models import HitWord
+    from collector.pipeline.export import WORD_COLUMNS, export_hit_words, render_hit_words
+
+    words = {w.word: w for w in demo.query(HitWord)}
+    assert words
+    result = export_hit_words(demo, "csv", tmp_path / "w.csv")
+    rows = read_csv((tmp_path / "w.csv").read_text(encoding="utf-8-sig"))
+    assert result.rows == len(rows) == len(words)
+    assert tuple(rows[0]) == WORD_COLUMNS
+    for r in rows:
+        assert int(r["word_count"]) == words[r["word"]].count
+    counts = [int(r["word_count"]) for r in rows]
+    assert counts == sorted(counts, reverse=True)
+
+    text, n = render_hit_words(demo, "jsonl", q="malaya")
+    records = [json.loads(line) for line in text.splitlines()]
+    assert n == len(records) > 0
+    assert all(words[r["word"]].root == "malaya" for r in records)
+    with pytest.raises(ExportError):
+        render_hit_words(demo, "xlsx")
+
+
+def test_cli_and_admin_hit_words(
+    demo: Session, engine: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from fastapi.testclient import TestClient
+
+    from collector.api import app, get_sessionmaker
+    from collector.cli import app as cli
+    from collector.config import get_settings
+
+    out = tmp_path / "words.jsonl"
+    result = CliRunner().invoke(cli, ["export-words", "--format", "jsonl", "--out", str(out)])
+    assert result.exit_code == 0, result.output
+    assert "words to" in result.output and out.read_text(encoding="utf-8")
+
+    monkeypatch.setenv("ADMIN_PASSWORD", "pw")
+    get_settings.cache_clear()
+    factory = sessionmaker(engine, expire_on_commit=False)
+    app.dependency_overrides[get_sessionmaker] = lambda: factory
+    try:
+        client = TestClient(app)
+        client.auth = ("admin", "pw")
+        assert "/admin/words/export?q=&amp;fmt=csv" in client.get("/admin/words").text
+        resp = client.get("/admin/words/export?fmt=csv")
+        assert resp.status_code == 200
+        assert resp.headers["content-disposition"].startswith('attachment; filename="hit-words-')
+        assert read_csv(resp.content.decode("utf-8-sig"))
+        assert client.get("/admin/words/export?fmt=xlsx").status_code == 400
+    finally:
+        app.dependency_overrides.clear()

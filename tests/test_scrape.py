@@ -412,3 +412,78 @@ def test_fb_store_docs(db: Session) -> None:
     assert rows["fb:1"].author_hash == hash_author("id:fb:u1")
     assert all("Secret" not in json.dumps(c.raw_json) for c in rows.values())
     assert account.ig_user_id == "scrape:fb:millardayo"
+
+
+# --- rate limits ----------------------------------------------------------------------
+
+
+class FakeClock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+        self.slept: list[float] = []
+
+    def __call__(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+        self.now += seconds
+
+
+def test_429_is_a_rate_limit() -> None:
+    from collector.scrape.common import RateLimitedError
+
+    with pytest.raises(RateLimitedError):
+        instagram.check_response(429, "")
+    with pytest.raises(RateLimitedError):
+        instagram.check_response(200, '{"message": "Please wait a few minutes"}')
+    with pytest.raises(BlockedError) as e:
+        instagram.check_response(200, '{"message": "checkpoint_required"}')
+    assert not isinstance(e.value, RateLimitedError)
+
+
+def test_cooldown_waits_and_carries_on() -> None:
+    from collector.scrape.common import COOLDOWN_STEPS_S, Cooldown, RateLimitedError
+
+    clock = FakeClock()
+    cd = Cooldown("instagram", sleep=clock.sleep, clock=clock)
+    answers: list[object] = [RateLimitedError("429"), RateLimitedError("429"), {"ok": 1}]
+
+    def fetch() -> object:
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    assert cd.call(fetch) == {"ok": 1}
+    assert clock.slept == list(COOLDOWN_STEPS_S[:2])  # 15 then 30 minutes
+    assert cd.call(lambda: "next") == "next" and len(clock.slept) == 2  # no pause once lifted
+
+
+def test_cooldown_gives_up_and_next_job_waits_first() -> None:
+    from collector.scrape.common import COOLDOWN_MAX_S, COOLDOWN_STEPS_S, Cooldown, RateLimitedError
+
+    clock = FakeClock()
+    cd = Cooldown("instagram", sleep=clock.sleep, clock=clock)
+
+    def always_429() -> None:
+        raise RateLimitedError("429")
+
+    with pytest.raises(RateLimitedError):
+        cd.call(always_429)
+    assert sum(clock.slept) >= COOLDOWN_MAX_S
+    clock.slept.clear()
+    assert cd.call(lambda: "ok") == "ok"
+    assert clock.slept == [COOLDOWN_STEPS_S[-1]]  # the next run starts after a last pause
+
+
+def test_pacer_hourly_cap() -> None:
+    clock = FakeClock()
+    pacer = Pacer(0, sleep=clock.sleep, max_per_hour=3, clock=clock)
+    for _ in range(3):
+        pacer.wait()
+        clock.now += 60
+    assert clock.slept == []
+    pacer.wait()  # 4th request within the hour waits for the 1st to age out
+    assert clock.slept == [3600 - 180]
+    assert Pacer(0, sleep=clock.sleep).max_per_hour == 0  # uncapped by default

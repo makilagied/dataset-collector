@@ -42,6 +42,7 @@ from collector.pipeline.export import (
     filter_comments,
     iter_all_comments,
     render_batch,
+    render_hit_words,
 )
 from collector.pipeline.sample import HIT_THRESHOLD, SampleError, parse_mix, sample_batch
 from collector.pipeline.scoring import SCORERS
@@ -778,6 +779,23 @@ def hit_word_list(
         page=page,
         pages=max(1, -(-total // PAGE_SIZE)),
         page_url=page_url,
+        export_url=lambda fmt: "/admin/words/export?" + urlencode({"q": q, "fmt": fmt}),
+    )
+
+
+@router.get("/words/export")
+def download_hit_words(db: Db, fmt: str = "csv", q: str = "") -> Response:
+    """Download every hit spelling and its comment count (filtered like the page)."""
+    try:
+        text, _ = render_hit_words(db, fmt, q)
+    except ExportError as e:
+        raise HTTPException(400, str(e)) from e
+    stamp = datetime.now().strftime("%Y%m%d-%H%M")
+    media = "text/csv" if fmt == "csv" else "application/x-ndjson"
+    return Response(
+        text.encode(file_encoding(fmt)),
+        media_type=f"{media}; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="hit-words-{stamp}.{fmt}"'},
     )
 
 
@@ -788,7 +806,27 @@ def hit_word_list(
 def job_list(request: Request, db: Db, settings: SettingsDep) -> HTMLResponse:
     rows = db.scalars(select(Job).order_by(Job.id.desc()).limit(100)).all()
     active = any(j.status in jobs.ACTIVE for j in rows)
-    return render(request, "jobs.html", settings, jobs=rows, refresh=3 if active else None)
+    return render(
+        request,
+        "jobs.html",
+        settings,
+        jobs=rows,
+        retryable=jobs.RETRYABLE,
+        refresh=3 if active else None,
+    )
+
+
+@router.post("/jobs/{job_id}/retry")
+def retry_job(job_id: int, db: Db, factory: Factory, form: Form) -> Response:
+    try:
+        job, created = jobs.retry(db, factory, job_id)
+    except jobs.JobError as e:
+        return back(form, str(e), "error", "/admin/jobs")
+    if created:
+        return back(form, f"Retrying job #{job_id} as job #{job.id}.", default="/admin/jobs")
+    return back(
+        form, f"Job #{job_id} is already {job.status} again (job #{job.id}).", "warn", "/admin/jobs"
+    )
 
 
 # --- wiring --------------------------------------------------------------------------

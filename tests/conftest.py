@@ -54,6 +54,14 @@ def _env(monkeypatch: pytest.MonkeyPatch) -> None:
     get_settings.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def _online(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests never probe the real network: every host counts as reachable."""
+    from collector import net
+
+    monkeypatch.setattr(net, "online", lambda host, *a, **k: True)
+
+
 @pytest.fixture(scope="session")
 def engine() -> Iterator[Engine]:
     """Fresh schema in a dedicated test database (needs `docker compose up -d db`)."""

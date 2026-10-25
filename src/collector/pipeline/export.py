@@ -19,7 +19,7 @@ from typing import Any
 from sqlalchemy import Select, func, select, update
 from sqlalchemy.orm import Session
 
-from collector.models import Account, Comment, CommentFeatures, Media, Sample
+from collector.models import Account, Comment, CommentFeatures, HitWord, Media, Sample
 from collector.nlp.highlight import hit_words
 from collector.pipeline.sample import HIT_THRESHOLD
 
@@ -61,6 +61,7 @@ COLUMNS = (
     "annotator",
 )
 FORMATS = ("csv", "jsonl")
+WORD_COLUMNS = ("word", "word_count")
 
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _URL = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
@@ -320,3 +321,42 @@ def export_all_comments(session: Session, fmt: str, out: Path, **filters: Any) -
         for piece in iter_all_comments(session, fmt, counter=counter, **filters):
             f.write(piece)
     return ExportResult(path=out, rows=counter[0])
+
+
+# --- hit words ----------------------------------------------------------------------
+
+
+def render_hit_words(session: Session, fmt: str, q: str = "") -> tuple[str, int]:
+    """Every hit spelling and the number of comments containing it, most frequent first.
+    `q` filters like the admin Words page: roots containing it, or with a spelling
+    containing it."""
+    if fmt not in FORMATS:
+        raise ExportError(f"format must be one of {FORMATS}")
+    query = select(HitWord.word, HitWord.count)
+    if q:
+        needle = q.lower()
+        spelled = select(HitWord.root).where(HitWord.word.contains(needle, autoescape=True))
+        query = query.where(
+            HitWord.root.contains(needle, autoescape=True) | HitWord.root.in_(spelled)
+        )
+    rows = session.execute(query.order_by(HitWord.count.desc(), HitWord.word)).all()
+    records = [{"word": mask(r.word), "word_count": r.count} for r in rows]
+
+    buf = io.StringIO()
+    if fmt == "csv":
+        writer = csv.DictWriter(buf, fieldnames=WORD_COLUMNS)
+        writer.writeheader()
+        for rec in records:
+            writer.writerow({k: _csv_safe(v) for k, v in rec.items()})
+    else:
+        for rec in records:
+            buf.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    return buf.getvalue(), len(records)
+
+
+def export_hit_words(session: Session, fmt: str, out: Path, q: str = "") -> ExportResult:
+    text, rows = render_hit_words(session, fmt, q)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", newline="", encoding=file_encoding(fmt)) as f:
+        f.write(text)
+    return ExportResult(path=out, rows=rows)

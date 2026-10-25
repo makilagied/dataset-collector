@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     dedupe_hits: bool = True
     # Browser profile holding the logged-in Instagram/Facebook sessions used by `scrape`.
     scrape_profile_dir: str = ".scrape-profile"
+    # Most paced requests a scrape makes in any rolling hour (0 = no cap). Instagram rate
+    # limits a session (HTTP 429) after many hours at full speed.
+    scrape_max_requests_per_hour: int = 600
 
 
 @lru_cache

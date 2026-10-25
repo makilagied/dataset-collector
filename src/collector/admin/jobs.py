@@ -12,10 +12,10 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
 
-import httpx
 from sqlalchemy import CursorResult, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
+from collector import net
 from collector.accounts import refresh_expiring
 from collector.config import get_settings
 from collector.ig import oauth
@@ -29,6 +29,7 @@ from collector.security import decrypt_token
 log = logging.getLogger(__name__)
 
 ACTIVE = ("queued", "running")
+RETRYABLE = ("failed", "interrupted")
 _current = threading.local()  # the job the worker thread is running, for report()
 
 
@@ -53,7 +54,7 @@ def _backfill(session: Session, params: dict[str, Any]) -> str:
         raise JobError(f"@{account.username} is paused; resume it first")
     since = date.fromisoformat(params["since"]) if params.get("since") else None
     settings = get_settings()
-    with httpx.Client(timeout=30) as http:
+    with net.http_client() as http:
         client = GraphClient(
             decrypt_token(account.access_token_enc), http=http, version=settings.graph_api_version
         )
@@ -84,7 +85,7 @@ def _prune(session: Session, params: dict[str, Any]) -> str:
 
 def _refresh_tokens(session: Session, params: dict[str, Any]) -> str:
     days = int(params.get("days", 10))
-    with httpx.Client(timeout=30) as http:
+    with net.http_client() as http:
         results = refresh_expiring(session, http, timedelta(days=days))
     session.commit()
     if not results:
@@ -100,6 +101,13 @@ def report(session: Session, text: str) -> None:
     """Show progress on the running job (the Jobs page displays it until the job ends)."""
     job_id = getattr(_current, "job_id", None)
     if job_id is not None:
+        session.execute(update(Job).where(Job.id == job_id).values(result=redact(text)[:2000]))
+        session.commit()
+
+
+def _status(factory: sessionmaker[Session], job_id: int, text: str) -> None:
+    """Like report(), but in its own session: the job's may be in the middle of a write."""
+    with factory() as session:
         session.execute(update(Job).where(Job.id == job_id).values(result=redact(text)[:2000]))
         session.commit()
 
@@ -151,7 +159,7 @@ def _scrape(session: Session, params: dict[str, Any]) -> str:
 
 def _subscribe(session: Session, params: dict[str, Any]) -> str:
     account = _account(session, params)
-    with httpx.Client(timeout=30) as http:
+    with net.http_client() as http:
         oauth.subscribe_webhooks(http, get_settings(), decrypt_token(account.access_token_enc))
     return f"@{account.username}: subscribed to {', '.join(oauth.WEBHOOK_FIELDS)}"
 
@@ -175,6 +183,7 @@ def run_job(factory: sessionmaker[Session], job_id: int) -> None:
         job.status, job.started_at = "running", datetime.now(UTC)
         session.commit()
         _current.job_id = job_id
+        net.set_notifier(lambda text: _status(factory, job_id, text))
         try:
             job.result = HANDLERS[job.kind](session, dict(job.params or {}))
             job.status = "done"
@@ -188,6 +197,7 @@ def run_job(factory: sessionmaker[Session], job_id: int) -> None:
             job.status, job.error = "failed", redact(message)[:2000]
         finally:
             _current.job_id = None
+            net.set_notifier(None)
         job.finished_at = datetime.now(UTC)
         session.commit()
 
@@ -219,6 +229,16 @@ def enqueue(
     session.commit()
     runner.submit(factory, job.id)
     return job, True
+
+
+def retry(session: Session, factory: sessionmaker[Session], job_id: int) -> tuple[Job, bool]:
+    """Queue a fresh copy of a failed or interrupted job; the old one stays in the history."""
+    job = session.get(Job, job_id)
+    if job is None:
+        raise JobError(f"job #{job_id} not found")
+    if job.status not in RETRYABLE:
+        raise JobError(f"job #{job_id} is {job.status}; only failed or interrupted jobs retry")
+    return enqueue(session, factory, job.kind, dict(job.params or {}))
 
 
 def mark_interrupted(session: Session) -> int:

@@ -3,10 +3,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
-import httpx
 import typer
 from sqlalchemy import select
 
+from collector import net
 from collector.accounts import refresh_expiring
 from collector.config import get_settings
 from collector.db import session_scope
@@ -63,7 +63,7 @@ def backfill(
     """Fetch media, comments and replies for one account. Safe to rerun; resumes if interrupted."""
     configure_logging(logging.INFO)
     settings = get_settings()
-    with session_scope() as session, httpx.Client(timeout=30) as http:
+    with session_scope() as session, net.http_client() as http:
         acct = session.get(Account, account)
         if acct is None or not acct.active:
             typer.echo(f"No active account with id {account}.", err=True)
@@ -242,6 +242,26 @@ def export_all(
     typer.echo(f"wrote {result.rows} comments to {result.path}")
 
 
+@app.command("export-words")
+def export_words(
+    format_: Annotated[str, typer.Option("--format", help="csv or jsonl")] = "csv",
+    q: Annotated[str, typer.Option(help="Only roots/spellings containing this")] = "",
+    out: Annotated[Path | None, typer.Option(help="Output file")] = None,
+) -> None:
+    """Export the hit words: every spelling seen and how many comments contain it."""
+    from collector.pipeline.export import ExportError, export_hit_words
+
+    stamp = datetime.now().strftime("%Y%m%d-%H%M")
+    path = out or Path("exports") / f"hit-words-{stamp}.{format_}"
+    try:
+        with session_scope() as session:
+            result = export_hit_words(session, format_, path, q=q)
+    except ExportError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from e
+    typer.echo(f"wrote {result.rows} words to {result.path}")
+
+
 @accounts_app.command("set-category")
 def accounts_set_category(
     account: Annotated[int, typer.Argument(help="Local account id")],
@@ -339,7 +359,7 @@ def webhooks_subscribe(
 ) -> None:
     """(Re)enable comments/live_comments webhook delivery for an account."""
     settings = get_settings()
-    with session_scope() as session, httpx.Client(timeout=30) as http:
+    with session_scope() as session, net.http_client() as http:
         acct = session.get(Account, account)
         if acct is None or acct.ig_user_id.startswith("scrape:"):
             typer.echo(f"No connected account with id {account}.", err=True)
@@ -508,7 +528,7 @@ def tokens_refresh(
     days: int = typer.Option(10, help="Refresh tokens expiring within N days"),
 ) -> None:
     """Refresh long-lived tokens that expire soon."""
-    with session_scope() as session, httpx.Client(timeout=30) as client:
+    with session_scope() as session, net.http_client() as client:
         results = refresh_expiring(session, client, timedelta(days=days))
         if not results:
             typer.echo("No tokens need refreshing.")

@@ -11,7 +11,7 @@
 <div class="panel flush">
   {% if jobs %}
   <div class="scroll"><table>
-    <tr><th>#</th><th>Job</th><th>Parameters</th><th>Status</th><th>Queued</th><th class="num">Duration</th><th>Result</th></tr>
+    <tr><th>#</th><th>Job</th><th>Parameters</th><th>Status</th><th>Queued</th><th class="num">Duration</th><th>Result</th><th></th></tr>
     {% for j in jobs %}
     <tr>
       <td class="id">{{ j.id }}</td>
@@ -21,6 +21,11 @@
       <td class="nowrap">{{ j.created_at|dt }}</td>
       <td class="num">{% if j.started_at and j.finished_at %}{{ "%.1f"|format((j.finished_at - j.started_at).total_seconds()) }}s{% endif %}</td>
       <td class="text">{{ j.error or j.result or "" }}</td>
+      <td class="nowrap">{% if j.status in retryable %}
+        <form class="inline" method="post" action="/admin/jobs/{{ j.id }}/retry">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="/admin/jobs">
+          <button class="btn sm">Retry</button>
+        </form>{% endif %}</td>
     </tr>
     {% endfor %}
   </table></div>
