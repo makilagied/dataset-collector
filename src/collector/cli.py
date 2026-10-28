@@ -390,13 +390,13 @@ OnlyHits = Annotated[
 
 @scrape_app.command("login")
 def scrape_login(
-    platform: Annotated[str, typer.Argument(help="instagram, facebook or tiktok")],
+    platform: Annotated[str, typer.Argument(help="instagram, facebook, tiktok or x")],
 ) -> None:
     """Open a browser window to log in by hand. The session is kept for later scrapes."""
     from collector.scrape.run import LOGIN_TIMEOUT, wait_for_login
 
-    if platform not in ("instagram", "facebook", "tiktok"):
-        typer.echo("platform must be instagram, facebook or tiktok", err=True)
+    if platform not in ("instagram", "facebook", "tiktok", "x"):
+        typer.echo("platform must be instagram, facebook, tiktok or x", err=True)
         raise typer.Exit(1)
     typer.echo(
         f"Log in in the browser window. It closes by itself once you are in "
@@ -510,6 +510,35 @@ def scrape_tiktok(
         only_hits=only_hits,
     )
     _run_scrape("tiktok", targets, options)
+
+
+@scrape_app.command("x")
+def scrape_x(
+    targets: Targets,
+    max_posts: MaxPosts = 20,
+    max_comments: MaxComments = 5000,
+    since: Annotated[
+        datetime | None, typer.Option(formats=["%Y-%m-%d"], help="Only posts on/after")
+    ] = None,
+    category: Category = None,
+    delay: Delay = 4.0,
+    refresh: Refresh = False,
+    only_hits: OnlyHits = None,
+) -> None:
+    """Scrape replies to posts on X (formerly Twitter) from @users, #hashtags or post URLs.
+    Log in first with `scrape login x`. If X rate limits, the scrape pauses and carries on."""
+    from collector.scrape.run import ScrapeOptions
+
+    options = ScrapeOptions(
+        max_posts=max_posts,
+        max_comments=max_comments,
+        since=since.date() if since else None,
+        category=category,
+        delay=delay,
+        refresh=refresh,
+        only_hits=only_hits,
+    )
+    _run_scrape("x", targets, options)
 
 
 @app.command()

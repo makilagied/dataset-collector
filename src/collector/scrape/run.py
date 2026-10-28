@@ -15,6 +15,7 @@ from collector.ig.backfill import _get_state, _set_state
 from collector.scrape.browser import (
     LOGIN_URLS,
     TikTokSite,
+    XSite,
     first_page,
     instagram_fetch,
     instagram_post_lister,
@@ -38,7 +39,7 @@ log = logging.getLogger(__name__)
 class ScrapeOptions:
     max_posts: int = 20
     max_comments: int = 5000
-    since: date | None = None  # Instagram and TikTok
+    since: date | None = None  # Instagram, TikTok and X
     category: str | None = None
     delay: float = 4.0
     refresh: bool = False
@@ -123,6 +124,7 @@ def run_scrape(
     from collector.scrape.facebook import FacebookScraper
     from collector.scrape.instagram import InstagramScraper
     from collector.scrape.tiktok import TikTokScraper
+    from collector.scrape.twitter import XScraper
 
     if platform not in PLATFORMS:
         raise ScrapeError(f"platform must be one of {', '.join(PLATFORMS)}")
@@ -135,8 +137,21 @@ def run_scrape(
             run.blocked = f"not logged in to {platform}; log in first"
             return run
         page = first_page(context)
-        scraper: InstagramScraper | FacebookScraper | TikTokScraper
-        if platform == "tiktok":
+        scraper: InstagramScraper | FacebookScraper | TikTokScraper | XScraper
+        if platform == "x":
+            scraper = XScraper(
+                session,
+                XSite(page, pacer),
+                pacer,
+                max_posts=options.max_posts,
+                max_comments=options.max_comments,
+                since=options.since,
+                category=options.category,
+                refresh=options.refresh,
+                only_hits=options.only_hits,
+                progress=progress,
+            )
+        elif platform == "tiktok":
             scraper = TikTokScraper(
                 session,
                 TikTokSite(page, pacer),

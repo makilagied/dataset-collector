@@ -16,8 +16,14 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
 from collector import net
-from collector.scrape import instagram, tiktok
-from collector.scrape.common import BlockedError, Pacer, ScrapeError, cooldown_for
+from collector.scrape import instagram, tiktok, twitter
+from collector.scrape.common import (
+    BlockedError,
+    Pacer,
+    RateLimitedError,
+    ScrapeError,
+    cooldown_for,
+)
 
 if TYPE_CHECKING:
     from playwright.sync_api import BrowserContext, Page, Response
@@ -28,16 +34,19 @@ LOGIN_URLS = {
     "instagram": "https://www.instagram.com/accounts/login/",
     "facebook": "https://www.facebook.com/login/",
     "tiktok": "https://www.tiktok.com/login",
+    "x": "https://x.com/i/flow/login",
 }
 # (cookie name, site domain): Instagram and TikTok both call theirs "sessionid".
 SESSION_COOKIES = {
     "instagram": ("sessionid", "instagram.com"),
     "facebook": ("c_user", "facebook.com"),
     "tiktok": ("sessionid", "tiktok.com"),
+    "x": ("auth_token", "x.com"),
 }
 
 IG_HOST = net.host_of(instagram.BASE)
 TT_HOST = net.host_of(tiktok.BASE)
+X_HOST = net.host_of(twitter.BASE)
 
 _FETCH_JS = """
 async ({url, appId}) => {
@@ -504,4 +513,160 @@ class TikTokSite:
                 self.page.wait_for_timeout(800)
         except Exception as e:  # a button vanished as the list changed
             log.debug("reply button: %s", e)
+        return clicked
+
+
+# --- x ------------------------------------------------------------------------------
+
+X_TIMELINES = ("/UserTweets", "/SearchTimeline")
+X_CONVERSATION = "/TweetDetail"
+# Buttons that load more of a conversation, including the replies X hides as "probable
+# spam" or "may contain offensive content": for this dataset those matter most.
+X_MORE_REPLIES = re.compile(
+    r"^\s*(show (more|additional) repl(y|ies)|show probable spam|show replies|show)\s*$", re.I
+)
+X_LOGIN_PATHS = ("/i/flow/login", "/login", "/account/access")
+
+
+class XSite:
+    """twitter.Site on a logged-in browser page: collects the GraphQL responses the page
+    itself loads."""
+
+    def __init__(
+        self,
+        page: "Page",
+        pacer: Pacer,
+        *,
+        max_scrolls: int = 300,
+        max_more_clicks: int = 100,
+        load_wait: float = 10.0,
+    ):
+        self.page = page
+        self.pacer = pacer
+        self.max_scrolls = max_scrolls
+        self.max_more_clicks = max_more_clicks
+        self.load_wait = load_wait
+        self.timeline_bodies: list[Any] = []
+        self.conversation_bodies: list[Any] = []
+        self.rate_limited = False
+        page.on("response", self._on_response)
+
+    def _on_response(self, response: "Response") -> None:
+        url = response.url.split("?")[0]
+        if "/i/api/graphql/" not in url:
+            return
+        is_conversation = url.endswith(X_CONVERSATION)
+        if not is_conversation and not url.endswith(X_TIMELINES):
+            return
+        if response.status == 429:
+            log.warning("X rate limited %s", url.rsplit("/", 1)[-1])
+            self.rate_limited = True
+            return
+        try:
+            data = response.json()
+        except Exception as e:  # empty, redirected or aborted responses
+            log.info("unreadable X response %s: %s", url.rsplit("/", 1)[-1], e)
+            return
+        (self.conversation_bodies if is_conversation else self.timeline_bodies).append(data)
+
+    # --- pages ------------------------------------------------------------------
+
+    def _goto(self, url: str) -> None:
+        """Load a page; while X is rate limiting, wait it out (see Cooldown) and load again."""
+
+        def load() -> None:
+            self.rate_limited = False
+            net.call(lambda: self.page.goto(url, wait_until="domcontentloaded"), X_HOST)
+            self.page.wait_for_timeout(3000)
+            self._check_blocked()
+
+        cooldown_for("x").call(load)
+
+    def _check_blocked(self) -> None:
+        if any(p in self.page.url for p in X_LOGIN_PATHS):
+            raise BlockedError(
+                "X wants a login to go on: run `collector scrape login x` "
+                "(or Log in to X on the Scrape page) and scrape again"
+            )
+        if self.rate_limited:
+            self.rate_limited = False
+            raise RateLimitedError("X is rate limiting (HTTP 429)")
+
+    def _wait_for(self, bodies: list[Any]) -> None:
+        deadline = time.monotonic() + self.load_wait
+        while not bodies and time.monotonic() < deadline:
+            self.page.wait_for_timeout(500)
+
+    # --- twitter.Site -------------------------------------------------------------
+
+    def list_posts(self, url: str, enough: Callable[[twitter.Tweets], bool]) -> twitter.Tweets:
+        self.timeline_bodies.clear()
+        self._goto(url)
+        self._wait_for(self.timeline_bodies)
+        posts: dict[str, dict[str, Any]] = {}
+        idle = 0
+        for _ in range(self.max_scrolls):
+            before = len(posts)
+            while self.timeline_bodies:
+                for t in twitter.find_tweets(self.timeline_bodies.pop(0)):
+                    posts.setdefault(t["rest_id"], t)
+            if enough(list(posts.values())):
+                break
+            idle = idle + 1 if len(posts) == before else 0
+            if idle >= 4:
+                if not net.wait_for_network(X_HOST):
+                    break  # end of the timeline
+                idle = 0  # the connection had dropped; keep scrolling now it's back
+            self.page.mouse.wheel(0, 3000)
+            self.pacer.wait(0.6)
+            self.page.wait_for_timeout(1500)
+            self._check_blocked()
+        return list(posts.values())
+
+    def open_post(self, url: str) -> dict[str, Any] | None:
+        post_id = url.rstrip("/").rsplit("/", 1)[-1]
+        self.conversation_bodies.clear()
+        self._goto(url)
+        self._wait_for(self.conversation_bodies)
+        for data in self.conversation_bodies:  # kept: they hold the first replies too
+            for t in twitter.find_tweets(data):
+                if t["rest_id"] == post_id:
+                    return t
+        return None
+
+    def read_replies(self, on_tweets: twitter.OnTweets) -> None:
+        clicks = idle = 0
+        for _ in range(self.max_scrolls):
+            got = bool(self.conversation_bodies)
+            while self.conversation_bodies:
+                if not on_tweets(twitter.find_tweets(self.conversation_bodies.pop(0))):
+                    return
+            clicked = 0
+            if clicks < self.max_more_clicks:
+                clicked = self._show_more(self.max_more_clicks - clicks)
+                clicks += clicked
+            idle = 0 if got or clicked else idle + 1
+            if idle >= 4:
+                if not net.wait_for_network(X_HOST):
+                    return
+                idle = 0  # the connection had dropped; keep reading now it's back
+            self.page.mouse.wheel(0, 2500)
+            self.pacer.wait(0.5)
+            self.page.wait_for_timeout(1200)
+            self._check_blocked()
+
+    def _show_more(self, budget: int) -> int:
+        clicked = 0
+        buttons = self.page.get_by_role("button", name=X_MORE_REPLIES)
+        try:
+            for i in range(min(buttons.count(), 3, budget)):
+                button = buttons.nth(i)
+                if not button.is_visible():
+                    continue
+                button.click(timeout=3000)
+                clicked += 1
+                self.pacer.wait(0.4)
+                self.page.wait_for_timeout(1000)
+        except Exception as e:  # a button vanished as the list changed
+            log.debug("show-more button: %s", e)
         return clicked

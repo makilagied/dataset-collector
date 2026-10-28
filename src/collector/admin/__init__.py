@@ -453,7 +453,7 @@ def scrape_login(db: Db, factory: Factory, form: Form) -> Response:
 
 @router.post("/scrape")
 def scrape_start(db: Db, factory: Factory, form: Form) -> Response:
-    from collector.scrape import facebook, instagram, tiktok
+    from collector.scrape import facebook, instagram, tiktok, twitter
     from collector.scrape.common import ScrapeError
     from collector.scrape.run import unavailable_reason
 
@@ -474,6 +474,7 @@ def scrape_start(db: Db, factory: Factory, form: Form) -> Response:
         "instagram": instagram.parse_target,
         "facebook": facebook.parse_target,
         "tiktok": tiktok.parse_target,
+        "x": twitter.parse_target,
     }[platform]
     bad = []
     for t in targets:
@@ -494,7 +495,7 @@ def scrape_start(db: Db, factory: Factory, form: Form) -> Response:
     except ValueError:
         return error("Numbers only in the limits")
     since = form.get("since", "").strip()
-    if since and platform in ("instagram", "tiktok"):
+    if since and platform in ("instagram", "tiktok", "x"):
         try:
             datetime.strptime(since, "%Y-%m-%d")
         except ValueError:

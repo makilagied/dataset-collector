@@ -27,12 +27,13 @@ from collector.storage_filter import prepare
 log = logging.getLogger(__name__)
 
 SCRAPE_PREFIX = "scrape:"
-PLATFORMS = ("instagram", "facebook", "tiktok")
-_SHORT = {"instagram": "ig", "facebook": "fb", "tiktok": "tt"}
-PLATFORM_NAMES = {"ig": "Instagram", "fb": "Facebook", "tt": "TikTok"}
+PLATFORMS = ("instagram", "facebook", "tiktok", "x")
+_SHORT = {"instagram": "ig", "facebook": "fb", "tiktok": "tt", "x": "x"}
+PLATFORM_NAMES = {"ig": "Instagram", "fb": "Facebook", "tt": "TikTok", "x": "X"}
 PLATFORM_LABELS = {p: PLATFORM_NAMES[_SHORT[p]] for p in PLATFORMS}
 # TikTok shows public videos and comments without an account; logging in is optional.
-LOGIN_REQUIRED = frozenset({"instagram", "facebook"})
+# X shows logged-out visitors a post but not its replies.
+LOGIN_REQUIRED = frozenset({"instagram", "facebook", "x"})
 
 
 class ScrapeError(Exception):

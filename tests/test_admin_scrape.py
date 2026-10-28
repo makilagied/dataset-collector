@@ -250,3 +250,37 @@ def test_tiktok_scrape_job(
     assert status == 303 and "kind=error" in loc and "TikTok" in loc
     ensure_account(db, "tiktok", "mama")
     assert '<span class="chip">TikTok</span>' in client.get("/admin/scrape").text
+
+
+def test_x_scrape_job(
+    client: TestClient,
+    db: Session,
+    fake_scrape: list[dict[str, Any]],
+) -> None:
+    html = client.get("/admin/scrape").text
+    assert "Log in to X" in html and "Start X scrape" in html
+    status, loc = post(
+        client,
+        "/admin/scrape",
+        platform="x",
+        targets="@mama\n#udaku\nhttps://x.com/mama/status/1830000000000000001",
+        max_posts="5",
+        max_comments="100",
+        delay="4",
+        since="2026-02-01",
+    )
+    assert status == 303 and "kind=ok" in loc
+    call = fake_scrape[0]
+    assert call["platform"] == "x" and str(call["options"].since) == "2026-02-01"
+    status, loc = post(
+        client,
+        "/admin/scrape",
+        platform="x",
+        targets="https://x.com/home",
+        max_posts="5",
+        max_comments="100",
+        delay="4",
+    )
+    assert status == 303 and "kind=error" in loc and "X+target" in loc
+    ensure_account(db, "x", "mama")
+    assert '<span class="chip">X</span>' in client.get("/admin/scrape").text

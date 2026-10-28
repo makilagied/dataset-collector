@@ -338,7 +338,7 @@ def test_tiktok_scrapes_without_login(db: Session, no_browser: list[str]) -> Non
     assert run.blocked is None and no_browser == ["@mama"]
 
 
-@pytest.mark.parametrize("platform", ["instagram", "facebook"])
+@pytest.mark.parametrize("platform", ["instagram", "facebook", "x"])
 def test_other_platforms_still_need_login(
     db: Session, no_browser: list[str], platform: str
 ) -> None:
